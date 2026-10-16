@@ -1,6 +1,9 @@
 # DocReady — Evidence-Backed Accounting Document Preparation & Export Platform
 
-**DocReady** เป็นระบบช่วยรับเอกสาร (Intake), จัดหมวดหมู่, สกัดข้อมูลพร้อมพิกัดหลักฐานบนภาพต้นฉบับ (Evidence-Backed OCR & Jev Decision), ตรวจสอบความครบถ้วนของชุดเอกสารประจำงวด (Checklist & Expected Items), ติดตามเอกสารที่ขาดจากลูกค้า, และสร้างชุดส่งออกเอกสาร (`XLSX` + `Split PDF` + `manifest.json`) สำหรับสำนักงานบัญชีในประเทศไทย
+[![Open Source](https://img.shields.io/badge/Open%20Source-Yes-brightgreen)](https://github.com/Sakeerin/DocReady)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+
+**DocReady** เป็นโปรเจกต์ **Open Source** สำหรับระบบช่วยรับเอกสาร (Intake), จัดหมวดหมู่, สกัดข้อมูลพร้อมพิกัดหลักฐานบนภาพต้นฉบับ (Evidence-Backed OCR & Jev Decision), ตรวจสอบความครบถ้วนของชุดเอกสารประจำงวด (Checklist & Expected Items), ติดตามเอกสารที่ขาดจากลูกค้า, และสร้างชุดส่งออกเอกสาร (`XLSX` + `Split PDF` + `manifest.json`) สำหรับสำนักงานบัญชีและนักพัฒนาที่ต้องการนำไปศึกษา พัฒนาต่อยอด หรือติดตั้งใช้งานเอง (Self-Hosted)
 
 ---
 
@@ -108,3 +111,18 @@ pnpm run dev
 - [`docs/document-field-dictionary.md`](docs/document-field-dictionary.md) — มาตรฐานฟิลด์ข้อมูลเอกสารและกฎการตรวจสอบ
 - [`docs/checklist-policy.md`](docs/checklist-policy.md) — นโยบายการประเมินความครบถ้วนของเอกสารประจำงวด
 - [`docs/evaluation-report.md`](docs/evaluation-report.md) — รายงานผลการประเมินความแม่นยำระหว่าง Baseline กับ Jev Pipeline
+
+---
+
+## 7. Open Source, การมีส่วนร่วม และสัญญาอนุญาต (Open Source & License)
+
+โปรเจกต์ **DocReady** เปิดเผยซอร์สโค้ดในรูปแบบ **Open Source** เพื่อให้ชุมชนนักพัฒนาและสำนักงานบัญชีสามารถนำไปใช้งาน ตรวจสอบความโปร่งใสของอัลกอริทึม และร่วมกันพัฒนาต่อยอดได้
+
+### แนวทางการร่วมพัฒนา (Contributing)
+1. ศึกษากฎเหล็กสถาปัตยกรรมและแนวทางการเขียนโค้ดใน [`AGENTS.md`](AGENTS.md)
+2. สร้าง Branch ใหม่จาก `main` สำหรับฟีเจอร์หรือการแก้ไขบั๊ก
+3. ตรวจสอบให้แน่ใจว่าโค้ดผ่าน `pnpm run typecheck` และ `pnpm run test` ครบทุกชุดทดสอบก่อนเปิด Pull Request
+
+### สัญญาอนุญาต (License)
+เผยแพร่ภายใต้สัญญาอนุญาตแบบเปิด (**MIT License**)
+
