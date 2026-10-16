@@ -1,0 +1,339 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "dataset_version": "1.0.0",
+  "generated_at": "2026-10-06T09:47:00+07:00",
+  "total_documents": 100,
+  "description": "Baseline synthetic document dataset inventory for DocReady Phase S0 (DR-004) testing, OCR evaluation, and multi-tenant domain verification.",
+  "documents": [
+    {
+      "id": "DOC-SYN-001",
+      "synthetic_tag": "DEMO_SYNTHETIC",
+      "test_case_category": "digital_pdf_standard",
+      "filename": "syn_tax_inv_001.pdf",
+      "document_roles": ["invoice", "tax_invoice"],
+      "primary_queue_category": "tax_invoice",
+      "document_number": "INV-2026-0001",
+      "document_date": {
+        "raw_text": "05/10/2026",
+        "normalized_iso": "2026-10-05",
+        "calendar_basis": "CE"
+      },
+      "seller": {
+        "name": "บริษัท สยาม ไอที เซอร์วิส จำกัด",
+        "tax_id": "0105558001111",
+        "branch": "00000"
+      },
+      "buyer": {
+        "name": "บริษัท ลูกค้าทดสอบ 1 จำกัด",
+        "tax_id": "0105559009999",
+        "branch": "00001"
+      },
+      "amounts": {
+        "subtotal": "10000.00",
+        "stated_tax": "700.00",
+        "grand_total": "10700.00",
+        "currency": "THB"
+      },
+      "declared_tax_rate": "7.00",
+      "quality_flags": [],
+      "field_status_summary": "proposed"
+    },
+    {
+      "id": "DOC-SYN-002",
+      "synthetic_tag": "DEMO_SYNTHETIC",
+      "test_case_category": "buddhist_era_date",
+      "filename": "syn_receipt_be_002.pdf",
+      "document_roles": ["receipt"],
+      "primary_queue_category": "receipt",
+      "document_number": "REC-2569-0042",
+      "document_date": {
+        "raw_text": "01/10/2569",
+        "normalized_iso": "2026-10-01",
+        "calendar_basis": "BE"
+      },
+      "seller": {
+        "name": "ร้านค้าปลีกไอทีไทย",
+        "tax_id": "0105540002222",
+        "branch": "00000"
+      },
+      "buyer": {
+        "name": "บริษัท ลูกค้าทดสอบ 1 จำกัด",
+        "tax_id": "0105559009999",
+        "branch": "00001"
+      },
+      "amounts": {
+        "subtotal": "1500.00",
+        "stated_tax": "105.00",
+        "grand_total": "1605.00",
+        "currency": "THB"
+      },
+      "declared_tax_rate": "7.00",
+      "quality_flags": [],
+      "field_status_summary": "proposed"
+    },
+    {
+      "id": "DOC-SYN-003",
+      "synthetic_tag": "DEMO_SYNTHETIC",
+      "test_case_category": "faded_thermal_receipt",
+      "filename": "syn_faded_receipt_003.png",
+      "document_roles": ["receipt", "payment_evidence"],
+      "primary_queue_category": "receipt",
+      "document_number": "POS-88412",
+      "document_date": {
+        "raw_text": "02/10/2026",
+        "normalized_iso": "2026-10-02",
+        "calendar_basis": "CE"
+      },
+      "seller": {
+        "name": "กาแฟสดและเบเกอรี่ SME",
+        "tax_id": "0105561003333",
+        "branch": "00002"
+      },
+      "buyer": {
+        "name": "สด",
+        "tax_id": "",
+        "branch": ""
+      },
+      "amounts": {
+        "subtotal": "120.00",
+        "stated_tax": "0.00",
+        "grand_total": "120.00",
+        "currency": "THB"
+      },
+      "declared_tax_rate": "0.00",
+      "quality_flags": ["blurred", "low_ocr"],
+      "field_status_summary": "unreadable"
+    },
+    {
+      "id": "DOC-SYN-004",
+      "synthetic_tag": "DEMO_SYNTHETIC",
+      "test_case_category": "leading_zero_preservation",
+      "filename": "syn_leading_zero_004.pdf",
+      "document_roles": ["tax_invoice"],
+      "primary_queue_category": "tax_invoice",
+      "document_number": "004812",
+      "document_date": {
+        "raw_text": "03/10/2026",
+        "normalized_iso": "2026-10-03",
+        "calendar_basis": "CE"
+      },
+      "seller": {
+        "name": "บริษัท โลจิสติกส์ไทย 001 จำกัด",
+        "tax_id": "0105557000044",
+        "branch": "00000"
+      },
+      "buyer": {
+        "name": "บริษัท ลูกค้าทดสอบ 2 จำกัด",
+        "tax_id": "0105559008888",
+        "branch": "00000"
+      },
+      "amounts": {
+        "subtotal": "5000.00",
+        "stated_tax": "350.00",
+        "grand_total": "5350.00",
+        "currency": "THB"
+      },
+      "declared_tax_rate": "7.00",
+      "quality_flags": [],
+      "field_status_summary": "proposed"
+    },
+    {
+      "id": "DOC-SYN-005",
+      "synthetic_tag": "DEMO_SYNTHETIC",
+      "test_case_category": "foreign_currency_usd",
+      "filename": "syn_foreign_usd_005.pdf",
+      "document_roles": ["invoice"],
+      "primary_queue_category": "invoice",
+      "document_number": "INV-US-991",
+      "document_date": {
+        "raw_text": "2026-09-28",
+        "normalized_iso": "2026-09-28",
+        "calendar_basis": "CE"
+      },
+      "seller": {
+        "name": "Global Cloud Hosting Inc.",
+        "tax_id": "US-99887711",
+        "branch": ""
+      },
+      "buyer": {
+        "name": "บริษัท ลูกค้าทดสอบ 1 จำกัด",
+        "tax_id": "0105559009999",
+        "branch": "00001"
+      },
+      "amounts": {
+        "subtotal": "250.00",
+        "stated_tax": "0.00",
+        "grand_total": "250.00",
+        "currency": "USD"
+      },
+      "declared_tax_rate": null,
+      "quality_flags": [],
+      "field_status_summary": "proposed"
+    },
+    {
+      "id": "DOC-SYN-006",
+      "synthetic_tag": "DEMO_SYNTHETIC",
+      "test_case_category": "combined_tax_inv_receipt",
+      "filename": "syn_combined_tax_rec_006.pdf",
+      "document_roles": ["tax_invoice", "receipt"],
+      "primary_queue_category": "tax_invoice",
+      "document_number": "TR-2026-1089",
+      "document_date": {
+        "raw_text": "04/10/2026",
+        "normalized_iso": "2026-10-04",
+        "calendar_basis": "CE"
+      },
+      "seller": {
+        "name": "บริษัท โทรคมนาคมไทย จำกัด (มหาชน)",
+        "tax_id": "0107536000555",
+        "branch": "00005"
+      },
+      "buyer": {
+        "name": "บริษัท ลูกค้าทดสอบ 1 จำกัด",
+        "tax_id": "0105559009999",
+        "branch": "00001"
+      },
+      "amounts": {
+        "subtotal": "2990.00",
+        "stated_tax": "209.30",
+        "grand_total": "3199.30",
+        "currency": "THB"
+      },
+      "declared_tax_rate": "7.00",
+      "quality_flags": [],
+      "field_status_summary": "proposed"
+    },
+    {
+      "id": "DOC-SYN-007",
+      "synthetic_tag": "DEMO_SYNTHETIC",
+      "test_case_category": "missing_tax_field",
+      "filename": "syn_missing_tax_007.pdf",
+      "document_roles": ["invoice"],
+      "primary_queue_category": "invoice",
+      "document_number": "BILL-1002",
+      "document_date": {
+        "raw_text": "05/10/2026",
+        "normalized_iso": "2026-10-05",
+        "calendar_basis": "CE"
+      },
+      "seller": {
+        "name": "ฟรีแลนซ์ รับออกแบบกราฟิก",
+        "tax_id": "1100400123456",
+        "branch": ""
+      },
+      "buyer": {
+        "name": "บริษัท ลูกค้าทดสอบ 2 จำกัด",
+        "tax_id": "0105559008888",
+        "branch": "00000"
+      },
+      "amounts": {
+        "subtotal": "8000.00",
+        "stated_tax": null,
+        "grand_total": "8000.00",
+        "currency": "THB"
+      },
+      "declared_tax_rate": null,
+      "quality_flags": [],
+      "field_status_summary": "missing"
+    },
+    {
+      "id": "DOC-SYN-008",
+      "synthetic_tag": "DEMO_SYNTHETIC",
+      "test_case_category": "duplicate_candidate_hash",
+      "filename": "syn_dup_candidate_008.pdf",
+      "document_roles": ["invoice", "tax_invoice"],
+      "primary_queue_category": "tax_invoice",
+      "document_number": "INV-2026-0001",
+      "document_date": {
+        "raw_text": "05/10/2026",
+        "normalized_iso": "2026-10-05",
+        "calendar_basis": "CE"
+      },
+      "seller": {
+        "name": "บริษัท สยาม ไอที เซอร์วิส จำกัด",
+        "tax_id": "0105558001111",
+        "branch": "00000"
+      },
+      "buyer": {
+        "name": "บริษัท ลูกค้าทดสอบ 1 จำกัด",
+        "tax_id": "0105559009999",
+        "branch": "00001"
+      },
+      "amounts": {
+        "subtotal": "10000.00",
+        "stated_tax": "700.00",
+        "grand_total": "10700.00",
+        "currency": "THB"
+      },
+      "declared_tax_rate": "7.00",
+      "quality_flags": ["ambiguous"],
+      "field_status_summary": "conflicting"
+    },
+    {
+      "id": "DOC-SYN-009",
+      "synthetic_tag": "DEMO_SYNTHETIC",
+      "test_case_category": "payment_transfer_slip",
+      "filename": "syn_slip_payment_009.jpg",
+      "document_roles": ["payment_evidence"],
+      "primary_queue_category": "payment_proof",
+      "document_number": "SLIP-20261005-99812",
+      "document_date": {
+        "raw_text": "05/10/2026 14:23",
+        "normalized_iso": "2026-10-05",
+        "calendar_basis": "CE"
+      },
+      "seller": {
+        "name": "บจก. สยาม ไอที",
+        "tax_id": "",
+        "branch": ""
+      },
+      "buyer": {
+        "name": "บจก. ลูกค้าทดสอบ 1",
+        "tax_id": "",
+        "branch": ""
+      },
+      "amounts": {
+        "subtotal": "10700.00",
+        "stated_tax": "0.00",
+        "grand_total": "10700.00",
+        "currency": "THB"
+      },
+      "declared_tax_rate": null,
+      "quality_flags": [],
+      "field_status_summary": "proposed"
+    },
+    {
+      "id": "DOC-SYN-010",
+      "synthetic_tag": "DEMO_SYNTHETIC",
+      "test_case_category": "multi_page_contract_invoice",
+      "filename": "syn_multipage_inv_010.pdf",
+      "document_roles": ["invoice"],
+      "primary_queue_category": "invoice",
+      "document_number": "CONTRACT-INV-88",
+      "document_date": {
+        "raw_text": "30/09/2026",
+        "normalized_iso": "2026-09-30",
+        "calendar_basis": "CE"
+      },
+      "seller": {
+        "name": "บริษัท อาคารพาณิชย์และบริการ จำกัด",
+        "tax_id": "0105553007777",
+        "branch": "00000"
+      },
+      "buyer": {
+        "name": "บริษัท ลูกค้าทดสอบ 1 จำกัด",
+        "tax_id": "0105559009999",
+        "branch": "00001"
+      },
+      "amounts": {
+        "subtotal": "45000.00",
+        "stated_tax": "3150.00",
+        "grand_total": "48150.00",
+        "currency": "THB"
+      },
+      "declared_tax_rate": "7.00",
+      "quality_flags": [],
+      "field_status_summary": "proposed"
+    }
+  ]
+}

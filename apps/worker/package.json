@@ -1,0 +1,25 @@
+{
+  "name": "@docready/worker",
+  "version": "1.0.0",
+  "private": true,
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "tsc --watch",
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@docready/contracts": "workspace:*",
+    "@docready/domain": "workspace:*",
+    "@docready/db": "workspace:*",
+    "@docready/ocr": "workspace:*",
+    "@docready/ai": "workspace:*",
+    "@docready/files": "workspace:*",
+    "@docready/exports": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.0",
+    "typescript": "^5.6.3"
+  }
+}
