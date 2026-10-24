@@ -460,3 +460,69 @@ export const UsageLedgerEntrySchema = z.object({
 });
 export type UsageLedgerEntry = z.infer<typeof UsageLedgerEntrySchema>;
 
+
+// ==========================================
+// Phase S9 Pilot Tracking DTO Schemas (DR-901 to DR-906)
+// Identifiers only: no tax IDs, names or document text are stored in pilot data.
+// ==========================================
+
+export const PilotModeSchema = z.enum(['baseline', 'assisted']);
+export type PilotMode = z.infer<typeof PilotModeSchema>;
+
+export const PilotStageSchema = z.enum(['stage1_1office_2clients', 'stage2_2offices_6clients']);
+export type PilotStage = z.infer<typeof PilotStageSchema>;
+
+export const PilotEventSchema = z.object({
+  officeId: z.string().min(1),
+  clientId: z.string().min(1),
+  periodId: z.string().min(1).optional(),
+  mode: PilotModeSchema,
+  documents: z.number().int().positive(),
+  activeSeconds: z.number().int().nonnegative(),
+  supportSeconds: z.number().int().nonnegative().default(0),
+  reviewRounds: z.number().int().nonnegative().default(0),
+  reworkedDocuments: z.number().int().nonnegative().default(0),
+  costSatang: z.number().int().nonnegative().default(0),
+  onboardingMinutes: z.number().int().nonnegative().optional(),
+  recordedAt: z.string(),
+});
+export type PilotEvent = z.infer<typeof PilotEventSchema>;
+
+export const ReviewSampleGroupSchema = z.enum([
+  'reviewer_accepted',
+  'reviewer_corrected',
+  'ai_abstained',
+]);
+export type ReviewSampleGroup = z.infer<typeof ReviewSampleGroupSchema>;
+
+export const ReviewSampleResultSchema = z.object({
+  documentId: z.string().min(1),
+  group: ReviewSampleGroupSchema,
+  category: z.string().min(1),
+  outcome: z.enum(['correct', 'incorrect']),
+});
+export type ReviewSampleResult = z.infer<typeof ReviewSampleResultSchema>;
+
+export const WillingnessToPaySurveySchema = z.object({
+  respondentRole: z.enum(['accountant', 'office_owner', 'client_admin']),
+  pricingModel: z.enum(['subscription_page_allowance', 'per_client_seat', 'per_page', 'other']),
+  priceBand: z.enum(['none', 'low', 'mid', 'high']),
+  wouldContinue: z.boolean(),
+  reasonCode: z.string().max(64).optional(),
+});
+export type WillingnessToPaySurvey = z.infer<typeof WillingnessToPaySurveySchema>;
+
+export const PilotMetricsRequestSchema = z.object({
+  events: z.array(PilotEventSchema),
+  minDocuments: z.number().int().positive().optional(),
+});
+export type PilotMetricsRequest = z.infer<typeof PilotMetricsRequestSchema>;
+
+export const PilotDecisionRequestSchema = z.object({
+  workingDays: z.number().int().nonnegative(),
+  sampleSizeOk: z.boolean(),
+  accountingCycleClosed: z.boolean(),
+  timeReductionPercent: z.number().nullable(),
+  reworkWorseThanBaseline: z.boolean().nullable(),
+});
+export type PilotDecisionRequest = z.infer<typeof PilotDecisionRequestSchema>;

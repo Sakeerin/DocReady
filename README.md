@@ -61,8 +61,8 @@ DocReady/
 | **S5: Human Review & Duplicates** | Completed | ระบบ Optimistic Concurrency Control (`expected_revision` / `409 Conflict`), ตรวจจับเอกสารซ้ำทั้งระดับไฟล์ (`SHA-256`) และระดับความหมาย (`Semantic Duplicate`), และแยกความสัมพันธ์ `supports` vs `duplicate_of` |
 | **S6: Checklists & Missing Requests** | Completed | นำเข้ารายการเอกสารที่คาดหวังผ่าน CSV, ผูกเอกสารเข้ากับ Checklist, ระบบส่งคำขอเอกสารเพิ่มให้ลูกค้า (`draft` → `published` → `responded` → `resolved`), และคำนวณ `coverage_basis` |
 | **S7: Package Export & Usage Ledger** | Completed | สร้าง Immutable Package Snapshot, ส่งออก `XLSX` 5 ชีต (`Documents`, `EvidenceIndex`, `Checklist`, `Exceptions`, `PackageInfo`) + ไฟล์ PDF แยกตาม `page_range` + `manifest.json`, แยก `counting_role` ไม่นับยอดใบเสร็จซ้ำกับใบแจ้งหนี้, แยกยอดรวมตามสกุลเงิน, และหน้า Dashboard รายงานผลการปฏิบัติงานและโควตา |
-| **S8: QA, Hardening & Security** | Planned | ทดสอบรับโหลด (Load Testing), ตรวจสอบความปลอดภัยเชิงลึก และจัดทำ Disaster Recovery Runbooks |
-| **S9: Pilot Deployment** | Planned | ทดลองใช้งานจริงกับสำนักงานบัญชีนำร่องและสรุปผลประเมิน |
+| **S8: QA, Hardening & Security** | Code complete (UAT/staging pending) | ครบ test matrix T-01–T-30, fair queue, kill switches, log redaction, tombstone/legal hold; UAT 30 เคส, load test จริง และ staging sign-off ต้องดำเนินการโดยทีม ([`docs/pilot-readiness-checklist.md`](docs/pilot-readiness-checklist.md)) |
+| **S9: Pilot Deployment** | Tooling complete (pilot not yet run) | เครื่องมือประเมิน pilot: Wilson gate สำหรับ auto-classification, สุ่มตรวจ 3 กลุ่ม, pilot metrics/decision ที่ตอบ `insufficient_sample` เมื่อข้อมูลไม่พอ, [`docs/pilot-playbook.md`](docs/pilot-playbook.md) และ [`docs/pilot-report.md`](docs/pilot-report.md) (ผลจริงยังเป็น TBD) |
 
 ---
 

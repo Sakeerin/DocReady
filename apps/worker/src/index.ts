@@ -1,43 +1,79 @@
 import { getOCRProvider, extractFieldCandidates } from '@docready/ocr';
-import { validateFileMagicBytes, inspectPdfHeader } from '@docready/files';
-import { checkFileQuotaLimits } from '@docready/domain';
+import {
+  evaluateKillSwitches,
+  readKillSwitchesFromEnv,
+  planOcrResume,
+  resolveStaleOcrResult,
+  redactDiagnosticText,
+} from '@docready/domain';
+
+/** Diagnostic logger: IDs/status/duration/error codes only; text is redacted (DR-804). */
+function log(message: string): void {
+  console.log(`[DocReady Worker] ${redactDiagnosticText(message)}`);
+}
 
 async function startWorker() {
-  console.log('[DocReady Worker] Initializing Multi-Provider OCR Background Processor...');
+  log('Initializing Multi-Provider OCR Background Processor...');
+
+  const switches = evaluateKillSwitches(readKillSwitchesFromEnv(process.env));
+  if (!switches.ocrEnabled) {
+    log(`OCR kill switch active: intake continues, status=${switches.intakeStatus}`);
+    return;
+  }
 
   const activeProviderType = process.env.DOCREADY_OCR_PROVIDER || 'mock';
-  console.log(`[DocReady Worker] Active OCR Engine: ${activeProviderType}`);
+  log(`Active OCR Engine: ${activeProviderType}`);
 
   const ocrEngine = getOCRProvider(activeProviderType);
 
   // Simulate Outbox OCR Submit Event
   const samplePdfBuffer = Buffer.from('%PDF-1.4\n%...\n/Type /Page\n');
-  
-  console.log('[DocReady Worker] Outbox Event received: submit_ocr_job for asset_001');
 
-  // Submit to active OCR engine
+  log('Outbox Event received: submit_ocr_job for asset_001');
+
+  // T-07: nothing persisted yet for this asset -> fresh submit (bounded attempts)
+  const action = planOcrResume({ submitOutcomeUnknown: false, attempts: 0, maxAttempts: 3 });
+  if (action !== 'resubmit') {
+    log(`OCR plan: ${action}`);
+    return;
+  }
+
   const operation = await ocrEngine.submit({
     assetId: 'asset_001',
     fileBuffer: samplePdfBuffer,
     mimeType: 'application/pdf',
   });
 
-  console.log(`[DocReady Worker] OCR Checkpoint Saved: Operation ID = ${operation.operationId}, Provider = ${operation.provider}`);
+  log(`OCR Checkpoint Saved: Operation ID = ${operation.operationId}, Provider = ${operation.provider}`);
 
-  // Poll OCR Results
   const ocrResult = await ocrEngine.poll(operation);
-  console.log(`[DocReady Worker] OCR Poll Complete: Spans count = ${ocrResult.spans.length}`);
+  log(`OCR Poll Complete: Spans count = ${ocrResult.spans.length}`);
 
-  // Candidate Extractor Phase
+  // T-08: never publish a result for a deleted/replaced asset
+  const disposition = resolveStaleOcrResult({
+    assetStatus: 'active',
+    assetVersion: 1,
+    resultVersion: 1,
+  });
+  if (disposition !== 'publish') {
+    log(`OCR result disposition: ${disposition}`);
+    return;
+  }
+
+  if (!switches.autoClassificationEnabled) {
+    log('Auto-classification kill switch active: manual classification required');
+  }
+
   const candidates = extractFieldCandidates(ocrResult.spans);
-  console.log(`[DocReady Worker] Candidate Extraction Complete: Extracted ${candidates.length} candidates:`, candidates);
+  log(`Candidate Extraction Complete: Extracted ${candidates.length} candidates`);
 
-  console.log('[DocReady Worker] Multi-Provider OCR Worker initialized and ready.');
+  log('Multi-Provider OCR Worker initialized and ready.');
 }
 
 if (require.main === module) {
-  startWorker().catch((err) => {
-    console.error('[DocReady Worker] Fatal OCR worker error:', err);
+  startWorker().catch((err: unknown) => {
+    const message = err instanceof Error ? err.message : 'unknown_error';
+    console.error(`[DocReady Worker] Fatal OCR worker error: ${redactDiagnosticText(message)}`);
     process.exit(1);
   });
 }

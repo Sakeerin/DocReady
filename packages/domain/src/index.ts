@@ -13,6 +13,7 @@ import {
   PackageItemSnapshot,
   UsageLedgerEntry,
   UsageMetricType,
+  PilotEvent,
 } from '@docready/contracts';
 
 /**
@@ -145,15 +146,27 @@ export function validateMonetaryComponents(
     return { isValid: true };
   }
 
-  const subtotalCents = Math.round(parseFloat(subtotalStr) * 100);
-  const taxCents = Math.round(parseFloat(taxStr) * 100);
-  const grandTotalCents = Math.round(parseFloat(grandTotalStr) * 100);
+  const toCents = (v: string): number => {
+    const negative = v.startsWith('-');
+    const [whole = '0', frac = ''] = (negative ? v.slice(1) : v).split('.');
+    // Round half-up at 2 decimals using string digits only (no floating point)
+    const frac3 = (frac + '000').slice(0, 3);
+    let cents = Number(BigInt(whole) * 100n + BigInt(frac3.slice(0, 2)));
+    if (Number(frac3[2]) >= 5) cents += 1;
+    return negative ? -cents : cents;
+  };
+
+  const subtotalCents = toCents(subtotalStr);
+  const taxCents = toCents(taxStr);
+  const grandTotalCents = toCents(grandTotalStr);
 
   const calculatedCents = subtotalCents + taxCents;
   const discrepancyCents = Math.abs(calculatedCents - grandTotalCents);
 
   const isValid = discrepancyCents <= 5;
-  const calculatedTotal = (calculatedCents / 100).toFixed(2);
+  const sign = calculatedCents < 0 ? '-' : '';
+  const absCents = Math.abs(calculatedCents);
+  const calculatedTotal = `${sign}${Math.floor(absCents / 100)}.${String(absCents % 100).padStart(2, '0')}`;
 
   return { isValid, calculatedTotal, discrepancyCents };
 }
@@ -803,3 +816,587 @@ export function computeOperationalMetrics(params: {
   };
 }
 
+
+// ==========================================
+// Phase S8 QA, Hardening & Pilot Readiness (DR-801 to DR-806)
+// ==========================================
+
+export interface FairQueueJob {
+  id: string;
+  officeId: string;
+  clientId: string;
+  pages: number;
+}
+
+export interface FairQueueConfig {
+  maxConcurrentPagesPerClient: number;
+  maxConcurrentJobsPerOffice: number;
+  dailyPageBudgetPerOffice: number;
+}
+
+export interface FairQueueResult {
+  started: FairQueueJob[];
+  deferred: FairQueueJob[];
+  rejectedBudget: FairQueueJob[];
+}
+
+/**
+ * Fair Queue Scheduler (DR-802): round-robin across (officeId, clientId) so one client cannot
+ * starve workers or provider budget of others. Pure function: caller supplies current usage.
+ */
+export function scheduleFairQueue(params: {
+  pending: FairQueueJob[];
+  config: FairQueueConfig;
+  runningPagesByClient?: Record<string, number>;
+  runningJobsByOffice?: Record<string, number>;
+  usedPagesTodayByOffice?: Record<string, number>;
+  totalWorkerSlots: number;
+}): FairQueueResult {
+  const { pending, config, totalWorkerSlots } = params;
+  const runningPages = { ...(params.runningPagesByClient ?? {}) };
+  const runningJobs = { ...(params.runningJobsByOffice ?? {}) };
+  const usedToday = { ...(params.usedPagesTodayByOffice ?? {}) };
+
+  const queues = new Map<string, FairQueueJob[]>();
+  for (const job of pending) {
+    const key = `${job.officeId}::${job.clientId}`;
+    const q = queues.get(key) ?? [];
+    q.push(job);
+    queues.set(key, q);
+  }
+
+  const started: FairQueueJob[] = [];
+  const deferred: FairQueueJob[] = [];
+  const rejectedBudget: FairQueueJob[] = [];
+  let slots = totalWorkerSlots;
+  let progressed = true;
+
+  while (progressed) {
+    progressed = false;
+    for (const [key, q] of queues) {
+      const job = q[0];
+      if (!job) continue;
+      if (slots <= 0) {
+        continue;
+      }
+      const officeUsed = usedToday[job.officeId] ?? 0;
+      if (officeUsed + job.pages > config.dailyPageBudgetPerOffice) {
+        q.shift();
+        rejectedBudget.push(job);
+        progressed = true;
+        continue;
+      }
+      const clientPages = runningPages[key] ?? 0;
+      const officeJobs = runningJobs[job.officeId] ?? 0;
+      if (
+        clientPages + job.pages > config.maxConcurrentPagesPerClient ||
+        officeJobs >= config.maxConcurrentJobsPerOffice
+      ) {
+        continue;
+      }
+      q.shift();
+      started.push(job);
+      runningPages[key] = clientPages + job.pages;
+      runningJobs[job.officeId] = officeJobs + 1;
+      usedToday[job.officeId] = officeUsed + job.pages;
+      slots -= 1;
+      progressed = true;
+    }
+  }
+
+  for (const q of queues.values()) deferred.push(...q);
+  return { started, deferred, rejectedBudget };
+}
+
+export interface KillSwitchConfig {
+  ocr?: boolean;
+  jev?: boolean;
+  autoClassification?: boolean;
+  export?: boolean;
+}
+
+export interface KillSwitchState {
+  ocrEnabled: boolean;
+  jevEnabled: boolean;
+  autoClassificationEnabled: boolean;
+  exportEnabled: boolean;
+  acceptUploads: true;
+  intakeStatus: 'normal' | 'delayed_manual';
+}
+
+/**
+ * Kill Switches (DR-806): `true` in config means the feature is KILLED. Uploads are always accepted
+ * (subject to quota); when OCR or Jev is down, new files are marked delayed/manual.
+ */
+export function evaluateKillSwitches(config: KillSwitchConfig): KillSwitchState {
+  const ocrEnabled = !config.ocr;
+  const jevEnabled = !config.jev;
+  return {
+    ocrEnabled,
+    jevEnabled,
+    autoClassificationEnabled: !config.autoClassification,
+    exportEnabled: !config.export,
+    acceptUploads: true,
+    intakeStatus: ocrEnabled && jevEnabled ? 'normal' : 'delayed_manual',
+  };
+}
+
+export function readKillSwitchesFromEnv(env: Record<string, string | undefined>): KillSwitchConfig {
+  const on = (v?: string) => v === '1' || v?.toLowerCase() === 'true';
+  return {
+    ocr: on(env.DOCREADY_KILL_OCR),
+    jev: on(env.DOCREADY_KILL_JEV),
+    autoClassification: on(env.DOCREADY_KILL_AUTOCLASS),
+    export: on(env.DOCREADY_KILL_EXPORT),
+  };
+}
+
+/**
+ * Diagnostic Log Redaction (DR-804): only IDs/status/duration/error codes may be logged.
+ * Redacts 13-digit tax IDs, bearer tokens, API keys and secret-like assignments.
+ */
+export function redactDiagnosticText(text: string): string {
+  return text
+    .replace(/\b\d{13}\b/g, '[REDACTED_TAX_ID]')
+    .replace(/Bearer\s+[A-Za-z0-9._\-]+/gi, 'Bearer [REDACTED]')
+    .replace(
+      /\b(api[_-]?key|secret|token|password|service[_-]?key)\b\s*[:=]\s*\S+/gi,
+      '$1=[REDACTED]'
+    )
+    .replace(/\beyJ[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{5,}\b/g, '[REDACTED_JWT]');
+}
+
+export function containsSecretOrPii(text: string): boolean {
+  return redactDiagnosticText(text) !== text;
+}
+
+export type OcrResultDisposition = 'publish' | 'stale' | 'cancelled';
+
+/**
+ * Stale OCR Result Guard (T-08): a result arriving after the asset was deleted/replaced
+ * must never be published or resurrect data.
+ */
+export function resolveStaleOcrResult(params: {
+  assetStatus: 'active' | 'deleted' | 'replaced';
+  assetVersion: number;
+  resultVersion: number;
+}): OcrResultDisposition {
+  if (params.assetStatus === 'deleted') return 'cancelled';
+  if (params.assetStatus === 'replaced' || params.assetVersion !== params.resultVersion) {
+    return 'stale';
+  }
+  return 'publish';
+}
+
+export type OcrResumeAction = 'poll_operation' | 'resubmit' | 'manual_review';
+
+/**
+ * OCR Resume Planner (T-07): resume from persisted operation ID; an unknown submission
+ * is retried only within a bounded attempt count, then escalated to manual review.
+ */
+export function planOcrResume(params: {
+  operationId?: string;
+  submitOutcomeUnknown: boolean;
+  attempts: number;
+  maxAttempts: number;
+}): OcrResumeAction {
+  if (params.operationId) return 'poll_operation';
+  if (params.submitOutcomeUnknown && params.attempts >= params.maxAttempts) {
+    return 'manual_review';
+  }
+  if (params.attempts >= params.maxAttempts) return 'manual_review';
+  return 'resubmit';
+}
+
+export type RetentionDecision = 'allow' | 'deny_tombstoned' | 'deny_legal_hold';
+
+/**
+ * Retention Guard (T-29): tombstoned assets can never be OCR'd, exported or restored;
+ * legal holds block deletion.
+ */
+export function evaluateRetentionAction(params: {
+  action: 'ocr' | 'export' | 'restore' | 'delete';
+  tombstoned: boolean;
+  legalHold: boolean;
+}): RetentionDecision {
+  if (params.action === 'delete') {
+    return params.legalHold ? 'deny_legal_hold' : 'allow';
+  }
+  if (params.tombstoned) return 'deny_tombstoned';
+  return 'allow';
+}
+
+export interface AmbiguousDateResult {
+  status: 'proposed' | 'ambiguous';
+  candidates: string[];
+  reason?: string;
+}
+
+/**
+ * Ambiguous Date Detector (T-13): dd/mm vs mm/dd and Buddhist (BE) vs Gregorian years.
+ * Never picks a tax period automatically for ambiguous input.
+ */
+export function detectAmbiguousDate(raw: string): AmbiguousDateResult {
+  const m = raw.trim().match(/^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2}|\d{4})$/);
+  if (!m) return { status: 'ambiguous', candidates: [], reason: 'unparseable_date' };
+  const a = Number(m[1]);
+  const b = Number(m[2]);
+  const yRaw = m[3]!;
+  const reasons: string[] = [];
+  const candidates: string[] = [];
+
+  const yearOptions: number[] = [];
+  if (yRaw.length === 2) {
+    yearOptions.push(2000 + Number(yRaw));
+    yearOptions.push(2500 + Number(yRaw));
+    reasons.push('two_digit_year');
+  } else {
+    const y = Number(yRaw);
+    if (y >= 2400) {
+      yearOptions.push(y - 543);
+      reasons.push('buddhist_era_converted');
+    } else {
+      yearOptions.push(y);
+    }
+  }
+
+  const dayMonthPairs: Array<[number, number]> = [];
+  if (a <= 12 && b <= 12 && a !== b) {
+    dayMonthPairs.push([a, b], [b, a]);
+    reasons.push('day_month_order');
+  } else if (b <= 12) {
+    dayMonthPairs.push([a, b]);
+  } else if (a <= 12) {
+    dayMonthPairs.push([b, a]);
+  }
+
+  for (const [d, mo] of dayMonthPairs) {
+    for (const y of yearOptions) {
+      candidates.push(`${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`);
+    }
+  }
+
+  const ambiguousReasons = reasons.filter((r) => r !== 'buddhist_era_converted');
+  if (candidates.length === 0) return { status: 'ambiguous', candidates, reason: 'invalid_date' };
+  if (candidates.length > 1 || ambiguousReasons.length > 0) {
+    return { status: 'ambiguous', candidates, reason: reasons.join(',') };
+  }
+  return { status: 'proposed', candidates };
+}
+
+/**
+ * Untrusted Text Guard (T-24): OCR text is data only. Detects instruction-like content so
+ * the pipeline flags it; no tenant, approval or amount change is ever derived from text.
+ */
+export function flagInstructionLikeText(text: string): { flagged: boolean; matches: string[] } {
+  const patterns = [
+    /ignore (all )?(previous|prior) instructions/i,
+    /switch (to )?(tenant|office|client)/i,
+    /\bapprove\b.{0,30}\b(package|document|all)\b/i,
+    /change (the )?(total|amount|grand total)/i,
+    /office_id|client_id/i,
+  ];
+  const matches = patterns.filter((p) => p.test(text)).map((p) => p.source);
+  return { flagged: matches.length > 0, matches };
+}
+
+export interface UatCaseResult {
+  caseId: string;
+  status: 'pass' | 'fail' | 'not_run';
+}
+
+/**
+ * Pilot Readiness Gate (DR-806): auto-approval must stay disabled and no critical defect may be open.
+ */
+export function evaluatePilotReadiness(params: {
+  criticalDefectsOpen: number;
+  autoApprovalEnabled: boolean;
+  killSwitchesAvailable: boolean;
+  uatResults: UatCaseResult[];
+  requiredUatCases: number;
+}): { ready: boolean; blockers: string[] } {
+  const blockers: string[] = [];
+  if (params.criticalDefectsOpen > 0) blockers.push('มี critical defect ค้างอยู่');
+  if (params.autoApprovalEnabled) blockers.push('auto-approval ต้องปิดสำหรับ pilot');
+  if (!params.killSwitchesAvailable) blockers.push('ยังไม่มี kill switches');
+  const passed = params.uatResults.filter((r) => r.status === 'pass').length;
+  if (params.uatResults.some((r) => r.status === 'fail')) blockers.push('มี UAT case ที่ไม่ผ่าน');
+  if (passed < params.requiredUatCases) {
+    blockers.push(`UAT ผ่าน ${passed}/${params.requiredUatCases} เคส (ต้องรันกับผู้ใช้จริงให้ครบ)`);
+  }
+  return { ready: blockers.length === 0, blockers };
+}
+
+/**
+ * Decision Contract Guard (T-19): a Jev/provider selection is accepted only if it is one of
+ * the bounded candidate IDs offered in the question. Otherwise the proposal is rejected and
+ * the document stays available for manual review.
+ */
+export function validateDecisionSelection(
+  allowedChoiceIds: string[],
+  selectedId: string | null | undefined
+): { accepted: boolean; requiresManualReview: boolean } {
+  if (selectedId && allowedChoiceIds.includes(selectedId) && selectedId !== 'none_ambiguous') {
+    return { accepted: true, requiresManualReview: false };
+  }
+  return { accepted: false, requiresManualReview: true };
+}
+
+/**
+ * Proposal Status Resolver (T-11): high Jev confidence must never mask a weak OCR read.
+ */
+export function resolveFieldProposalStatus(params: {
+  ocrConfidence: number;
+  jevConfidence?: number;
+  ocrConfidenceThreshold?: number;
+}): 'proposed' | 'needs_review' {
+  const threshold = params.ocrConfidenceThreshold ?? 0.9;
+  if (params.ocrConfidence < threshold) return 'needs_review';
+  return 'proposed';
+}
+
+// ==========================================
+// Phase S9 Pilot Evaluation Logic (DR-901 to DR-906)
+// Pure functions only; they never invent data. Insufficient evidence => keep assist / continue pilot.
+// ==========================================
+
+/** Wilson score lower bound for a proportion (used to gate auto-routing, plan section 30). */
+export function wilsonLowerBound(successes: number, total: number, z = 1.96): number {
+  if (total <= 0) return 0;
+  const p = successes / total;
+  const z2 = z * z;
+  const denom = 1 + z2 / total;
+  const centre = p + z2 / (2 * total);
+  const margin = z * Math.sqrt((p * (1 - p)) / total + z2 / (4 * total * total));
+  return Math.max(0, (centre - margin) / denom);
+}
+
+export interface CategoryDecisionStats {
+  category: string;
+  correct: number;
+  total: number;
+}
+
+export interface AutoClassificationGateResult {
+  autoRouteEnabled: boolean;
+  /** Invariant: financial fields and packages are NEVER auto-approved in the MVP. */
+  autoApproveFinancialFields: false;
+  autoApprovePackage: false;
+  totalDecisions: number;
+  categories: Array<{
+    category: string;
+    total: number;
+    correct: number;
+    lowerBound: number;
+    passed: boolean;
+  }>;
+  reason: string;
+}
+
+/**
+ * Auto-classification gate (DR-904): needs >= minTotalDecisions overall and each category's
+ * Wilson lower bound >= minLowerBound. Otherwise stay in assist mode.
+ */
+export function evaluateAutoClassificationGate(params: {
+  perCategory: CategoryDecisionStats[];
+  minTotalDecisions?: number;
+  minLowerBound?: number;
+}): AutoClassificationGateResult {
+  const minTotal = params.minTotalDecisions ?? 300;
+  const minLower = params.minLowerBound ?? 0.95;
+  const totalDecisions = params.perCategory.reduce((acc, c) => acc + c.total, 0);
+
+  const categories = params.perCategory.map((c) => {
+    const lowerBound = wilsonLowerBound(c.correct, c.total);
+    return {
+      category: c.category,
+      total: c.total,
+      correct: c.correct,
+      lowerBound,
+      passed: totalDecisions >= minTotal && lowerBound >= minLower,
+    };
+  });
+
+  const anyPassed = categories.some((c) => c.passed);
+  return {
+    autoRouteEnabled: anyPassed,
+    autoApproveFinancialFields: false,
+    autoApprovePackage: false,
+    totalDecisions,
+    categories,
+    reason:
+      totalDecisions < minTotal
+        ? `ตัวอย่างไม่พอ (${totalDecisions}/${minTotal} decisions) — คงโหมด assist`
+        : anyPassed
+        ? 'บางหมวดผ่านเกณฑ์ Wilson lower bound — เปิด auto-route เฉพาะหมวดที่ผ่าน'
+        : 'ไม่มีหมวดใดผ่าน Wilson lower bound — คงโหมด assist',
+  };
+}
+
+/** Coverage report (DR-903): always reports error rate alongside coverage. */
+export function computeCoverage(params: {
+  eligible: number;
+  autoClassified: number;
+  errors: number;
+}): { coverage: number | null; errorRate: number | null } {
+  const coverage = params.eligible > 0 ? params.autoClassified / params.eligible : null;
+  const errorRate = params.autoClassified > 0 ? params.errors / params.autoClassified : null;
+  return { coverage, errorRate };
+}
+
+function seededRandom(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * Stratified review sample (DR-903): draws from accepted, corrected AND AI-abstained groups so quality
+ * is not measured only on easy cases the system chose to answer. Deterministic per seed.
+ */
+export function buildReviewSample(params: {
+  items: Array<{ id: string; group: 'reviewer_accepted' | 'reviewer_corrected' | 'ai_abstained' }>;
+  perGroup: number;
+  seed: number;
+}): { sampled: Array<{ id: string; group: string }>; groupsCovered: string[]; shortfalls: string[] } {
+  const groups = ['reviewer_accepted', 'reviewer_corrected', 'ai_abstained'] as const;
+  const rand = seededRandom(params.seed);
+  const sampled: Array<{ id: string; group: string }> = [];
+  const shortfalls: string[] = [];
+
+  for (const group of groups) {
+    const pool = params.items.filter((i) => i.group === group).map((i) => i.id);
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(rand() * (i + 1));
+      [pool[i], pool[j]] = [pool[j]!, pool[i]!];
+    }
+    const picked = pool.slice(0, params.perGroup);
+    if (picked.length < params.perGroup) shortfalls.push(group);
+    for (const id of picked) sampled.push({ id, group });
+  }
+
+  return {
+    sampled,
+    groupsCovered: groups.filter((g) => sampled.some((s) => s.group === g)),
+    shortfalls,
+  };
+}
+
+export interface PilotMetricsResult {
+  status: 'ok' | 'insufficient_sample';
+  sampleSize: number;
+  minDocuments: number;
+  baseline?: PilotModeMetrics;
+  assisted?: PilotModeMetrics;
+  timeReductionPercent?: number | null;
+  reworkWorseThanBaseline?: boolean | null;
+}
+
+export interface PilotModeMetrics {
+  documents: number;
+  secondsPer100Docs: number;
+  reviewRoundsPerDoc: number;
+  reworkRate: number;
+  costSatangPer100Docs: number;
+}
+
+function summarizePilotMode(events: PilotEvent[]): PilotModeMetrics | undefined {
+  const documents = events.reduce((a, e) => a + e.documents, 0);
+  if (documents === 0) return undefined;
+  const seconds = events.reduce((a, e) => a + e.activeSeconds + e.supportSeconds, 0);
+  const rounds = events.reduce((a, e) => a + e.reviewRounds, 0);
+  const rework = events.reduce((a, e) => a + e.reworkedDocuments, 0);
+  const cost = events.reduce((a, e) => a + e.costSatang, 0);
+  return {
+    documents,
+    secondsPer100Docs: (seconds / documents) * 100,
+    reviewRoundsPerDoc: rounds / documents,
+    reworkRate: rework / documents,
+    costSatangPer100Docs: (cost / documents) * 100,
+  };
+}
+
+/**
+ * Pilot metrics (DR-905): returns insufficient_sample instead of numbers when either mode
+ * has fewer than minDocuments documents. Compares assisted vs baseline only when both exist.
+ */
+export function computePilotMetrics(params: {
+  events: PilotEvent[];
+  minDocuments?: number;
+}): PilotMetricsResult {
+  const minDocuments = params.minDocuments ?? 100;
+  const baseline = summarizePilotMode(params.events.filter((e) => e.mode === 'baseline'));
+  const assisted = summarizePilotMode(params.events.filter((e) => e.mode === 'assisted'));
+  const sampleSize = (baseline?.documents ?? 0) + (assisted?.documents ?? 0);
+
+  if (!baseline || !assisted || baseline.documents < minDocuments || assisted.documents < minDocuments) {
+    return { status: 'insufficient_sample', sampleSize, minDocuments };
+  }
+
+  const timeReductionPercent =
+    baseline.secondsPer100Docs > 0
+      ? ((baseline.secondsPer100Docs - assisted.secondsPer100Docs) / baseline.secondsPer100Docs) * 100
+      : null;
+
+  return {
+    status: 'ok',
+    sampleSize,
+    minDocuments,
+    baseline,
+    assisted,
+    timeReductionPercent,
+    reworkWorseThanBaseline: assisted.reworkRate > baseline.reworkRate,
+  };
+}
+
+/** Rollout gate (DR-901/DR-902): stage1 -> stage2 only without blocking defects and with S8 readiness. */
+export function evaluatePilotRolloutStage(params: {
+  blockingDefectsOpen: number;
+  s8ReadinessPassed: boolean;
+}): { canAdvance: boolean; blockers: string[] } {
+  const blockers: string[] = [];
+  if (params.blockingDefectsOpen > 0) blockers.push('ยังมี blocking defects ค้างอยู่');
+  if (!params.s8ReadinessPassed) blockers.push('S8 pilot readiness ยังไม่ผ่าน (UAT/staging)');
+  return { canAdvance: blockers.length === 0, blockers };
+}
+
+export type PilotDecision = 'expand' | 'keep_assist' | 'adjust_workflow' | 'continue_pilot';
+
+/**
+ * Pilot decision (DR-905/DR-906): short pilots, unfinished accounting cycles or thin samples
+ * can never justify a conclusion; the pilot simply continues.
+ */
+export function evaluatePilotDecision(params: {
+  workingDays: number;
+  sampleSizeOk: boolean;
+  accountingCycleClosed: boolean;
+  timeReductionPercent: number | null;
+  reworkWorseThanBaseline: boolean | null;
+  minWorkingDays?: number;
+  targetTimeReductionPercent?: number;
+}): { decision: PilotDecision; reason: string } {
+  const minDays = params.minWorkingDays ?? 7;
+  const target = params.targetTimeReductionPercent ?? 30;
+
+  if (params.workingDays < minDays) {
+    return { decision: 'continue_pilot', reason: `pilot ยังไม่ครบ ${minDays} วันทำงาน` };
+  }
+  if (!params.accountingCycleClosed) {
+    return { decision: 'continue_pilot', reason: 'งานบัญชียังไม่จบรอบจริง' };
+  }
+  if (!params.sampleSizeOk || params.timeReductionPercent === null || params.reworkWorseThanBaseline === null) {
+    return { decision: 'continue_pilot', reason: 'จำนวนตัวอย่างไม่พอ' };
+  }
+  if (params.timeReductionPercent >= target && !params.reworkWorseThanBaseline) {
+    return { decision: 'expand', reason: `ลดเวลา ≥${target}% และ rework ไม่แย่กว่า baseline` };
+  }
+  if (params.timeReductionPercent > 0 && !params.reworkWorseThanBaseline) {
+    return { decision: 'keep_assist', reason: 'มีประโยชน์แต่ยังไม่ถึงเป้า — คงโหมด assist' };
+  }
+  return { decision: 'adjust_workflow', reason: 'ไม่ลดเวลาหรือ rework แย่กว่า baseline — ปรับ workflow/adapter' };
+}

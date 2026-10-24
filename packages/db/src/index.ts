@@ -18,6 +18,9 @@ import {
   ExportManifest,
   UsageLedgerEntry,
   UsageMetricType,
+  PilotEvent,
+  ReviewSampleResult,
+  WillingnessToPaySurvey,
 } from '@docready/contracts';
 import {
   validateDocumentRevision,
@@ -34,12 +37,28 @@ import {
   ClientUsageSummary,
   computeOperationalMetrics,
   OperationalMetricsSummary,
+  evaluateRetentionAction,
+  computePilotMetrics,
+  PilotMetricsResult,
+  evaluateAutoClassificationGate,
+  AutoClassificationGateResult,
 } from '@docready/domain';
 import {
   createExportArchiveBundle,
   ExportArchiveBundle,
   verifyExportDownloadAccess,
 } from '@docready/exports';
+
+export interface AssetRecord {
+  id: string;
+  officeId: string;
+  clientId: string;
+  periodId: string;
+  storageKey: string;
+  fileHash: string;
+  sessionId: string;
+  version: number;
+}
 
 export interface DocumentRecord {
   id: string;
@@ -365,7 +384,15 @@ export class TenantRepository {
     }
 
     const nextRevision = doc.revisionNumber + 1;
-    Object.assign(doc, fields, {
+    // T-24: tenant scope, identity and revision are never writable through field updates
+    const {
+      id: _id,
+      officeId: _officeId,
+      clientId: _clientId,
+      revisionNumber: _revisionNumber,
+      ...safeFields
+    } = fields;
+    Object.assign(doc, safeFields, {
       revisionNumber: nextRevision,
       fieldStatusSummary: 'confirmed',
     });
@@ -964,6 +991,14 @@ export class TenantRepository {
       );
     }
 
+    for (const item of pkg.items) {
+      if (this.tombstonedAssets.has(item.sourceAssetId)) {
+        throw new Error(
+          `Export blocked: source asset ${item.sourceAssetId} was deleted (tombstoned)`
+        );
+      }
+    }
+
     const ttlSeconds = options?.ttlSeconds ?? 3600;
     const now = new Date();
     const expiresAt = new Date(now.getTime() + ttlSeconds * 1000).toISOString();
@@ -1183,6 +1218,170 @@ export class TenantRepository {
       }),
       usageByClient,
     };
+  }
+
+  // ==========================================
+  // Phase S8 Hardening: idempotent upload completion, tombstones & retention (DR-803)
+  // ==========================================
+
+  private assets = new Map<string, AssetRecord>();
+  private tombstonedAssets = new Set<string>();
+  private legalHoldAssets = new Set<string>();
+
+  /**
+   * T-03 & T-06: Completes an upload using ONLY the server-reserved session scope/storage key.
+   * Client-supplied clientId/periodId/storageKey are ignored. Repeated calls (e.g. retry after a
+   * DB failure) return the same asset instead of creating a duplicate.
+   */
+  public async completeUploadSession(
+    scope: TenantScope,
+    sessionId: string,
+    claimed: { fileHash: string; clientId?: string; periodId?: string; storageKey?: string }
+  ): Promise<{ asset: AssetRecord; alreadyCompleted: boolean }> {
+    const session = this.sessions.find((s) => s.id === sessionId);
+    if (
+      !session ||
+      session.officeId !== scope.officeId ||
+      (scope.clientId && session.clientId !== scope.clientId)
+    ) {
+      throw new Error('Upload session not found or access denied');
+    }
+
+    const existing = this.assets.get(`asset_${session.id}`);
+    if (existing) {
+      return { asset: existing, alreadyCompleted: true };
+    }
+
+    const asset: AssetRecord = {
+      id: `asset_${session.id}`,
+      officeId: session.officeId,
+      clientId: session.clientId,
+      periodId: session.periodId,
+      storageKey: session.storageKey,
+      fileHash: claimed.fileHash,
+      sessionId: session.id,
+      version: 1,
+    };
+    this.assets.set(asset.id, asset);
+    session.status = 'completed';
+    return { asset, alreadyCompleted: false };
+  }
+
+  public async getAsset(scope: TenantScope, assetId: string): Promise<AssetRecord | null> {
+    const asset = this.assets.get(assetId);
+    if (!asset || asset.officeId !== scope.officeId) return null;
+    if (scope.clientId && asset.clientId !== scope.clientId) return null;
+    return asset;
+  }
+
+  public async setLegalHold(scope: TenantScope, assetId: string, hold: boolean): Promise<void> {
+    const asset = await this.getAsset(scope, assetId);
+    if (!asset) throw new Error('Asset not found or access denied');
+    if (hold) this.legalHoldAssets.add(assetId);
+    else this.legalHoldAssets.delete(assetId);
+  }
+
+  /** Deletes an asset by tombstoning it. Legal hold blocks deletion. */
+  public async deleteAsset(scope: TenantScope, assetId: string): Promise<void> {
+    const asset = await this.getAsset(scope, assetId);
+    if (!asset) throw new Error('Asset not found or access denied');
+    const decision = evaluateRetentionAction({
+      action: 'delete',
+      tombstoned: this.tombstonedAssets.has(assetId),
+      legalHold: this.legalHoldAssets.has(assetId),
+    });
+    if (decision !== 'allow') {
+      throw new Error(`Asset deletion blocked: ${decision}`);
+    }
+    this.tombstonedAssets.add(assetId);
+    // Drop queued work referencing the deleted asset so it cannot replay later
+    for (const ev of this.outbox) {
+      if (ev.status === 'pending' && ev.payload.assetId === assetId) {
+        ev.status = 'failed';
+      }
+    }
+  }
+
+  /** T-29: Guard used before OCR submit, export, or restore of an asset. */
+  public async assertAssetUsable(
+    scope: TenantScope,
+    assetId: string,
+    action: 'ocr' | 'export' | 'restore'
+  ): Promise<void> {
+    const asset = await this.getAsset(scope, assetId);
+    if (!asset) throw new Error('Asset not found or access denied');
+    const decision = evaluateRetentionAction({
+      action,
+      tombstoned: this.tombstonedAssets.has(assetId),
+      legalHold: this.legalHoldAssets.has(assetId),
+    });
+    if (decision !== 'allow') {
+      throw new Error(`Asset action '${action}' blocked: ${decision}`);
+    }
+  }
+
+  // ==========================================
+  // Phase S9 Pilot tracking (DR-901 to DR-906): tenant-scoped, identifiers only
+  // ==========================================
+
+  private pilotEvents: PilotEvent[] = [];
+  private reviewSampleResults: Array<ReviewSampleResult & { officeId: string; clientId: string }> = [];
+  private wtpResponses: Array<WillingnessToPaySurvey & { officeId: string; clientId?: string }> = [];
+
+  public async recordPilotEvent(scope: TenantScope, event: PilotEvent): Promise<PilotEvent> {
+    if (!scope.clientId) {
+      throw new Error('Client Scope (clientId) is required to record a pilot event');
+    }
+    // Server scope wins over any scope inside the payload
+    const record: PilotEvent = { ...event, officeId: scope.officeId, clientId: scope.clientId };
+    this.pilotEvents.push(record);
+    return record;
+  }
+
+  public async getPilotMetrics(scope: TenantScope, minDocuments = 100): Promise<PilotMetricsResult> {
+    const events = this.pilotEvents.filter(
+      (e) => e.officeId === scope.officeId && (!scope.clientId || e.clientId === scope.clientId)
+    );
+    return computePilotMetrics({ events, minDocuments });
+  }
+
+  public async recordReviewSampleResult(
+    scope: TenantScope,
+    result: ReviewSampleResult
+  ): Promise<void> {
+    if (!scope.clientId) {
+      throw new Error('Client Scope (clientId) is required to record a review sample result');
+    }
+    this.reviewSampleResults.push({ ...result, officeId: scope.officeId, clientId: scope.clientId });
+  }
+
+  /** Evaluates the auto-classification gate from recorded review-sample outcomes (DR-903/DR-904). */
+  public async evaluateAutoClassificationGateForScope(
+    scope: TenantScope
+  ): Promise<AutoClassificationGateResult> {
+    const mine = this.reviewSampleResults.filter(
+      (r) => r.officeId === scope.officeId && (!scope.clientId || r.clientId === scope.clientId)
+    );
+    const byCategory = new Map<string, { correct: number; total: number }>();
+    for (const r of mine) {
+      const s = byCategory.get(r.category) ?? { correct: 0, total: 0 };
+      s.total += 1;
+      if (r.outcome === 'correct') s.correct += 1;
+      byCategory.set(r.category, s);
+    }
+    return evaluateAutoClassificationGate({
+      perCategory: Array.from(byCategory.entries()).map(([category, s]) => ({ category, ...s })),
+    });
+  }
+
+  public async recordWtpResponse(scope: TenantScope, response: WillingnessToPaySurvey): Promise<void> {
+    this.wtpResponses.push({ ...response, officeId: scope.officeId, clientId: scope.clientId });
+  }
+
+  public async getWtpResponses(scope: TenantScope): Promise<WillingnessToPaySurvey[]> {
+    return this.wtpResponses
+      .filter((r) => r.officeId === scope.officeId && (!scope.clientId || r.clientId === scope.clientId))
+      .map(({ officeId: _o, clientId: _c, ...rest }) => rest);
   }
 
   // Upload Sessions
