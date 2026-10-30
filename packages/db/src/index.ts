@@ -46,6 +46,8 @@ import {
 import {
   createExportArchiveBundle,
   ExportArchiveBundle,
+  generateRealExportArchive,
+  RealExportArchiveBundle,
   verifyExportDownloadAccess,
 } from '@docready/exports';
 
@@ -246,7 +248,9 @@ export interface ExportJobRecord {
   sha256Checksum?: string;
   fileSizeBytes?: number;
   manifest?: ExportManifest;
-  archiveBundle?: ExportArchiveBundle;
+  archiveBundle?: ExportArchiveBundle | RealExportArchiveBundle;
+  xlsxBuffer?: Buffer;
+  zipBuffer?: Buffer;
   errorMessage?: string;
   expiresAt: string;
   createdAt: string;
@@ -1022,7 +1026,7 @@ export class TenantRepository {
       return incompleteJob;
     }
 
-    const bundle = createExportArchiveBundle({
+    const bundle = await generateRealExportArchive({
       packageId: pkg.id,
       packageRevision: pkg.packageRevision,
       officeId: pkg.officeId,
@@ -1047,6 +1051,8 @@ export class TenantRepository {
       fileSizeBytes: bundle.fileSizeBytes,
       manifest: bundle.manifest,
       archiveBundle: bundle,
+      xlsxBuffer: bundle.xlsxBuffer,
+      zipBuffer: bundle.zipBuffer,
       expiresAt,
       createdAt: now.toISOString(),
       completedAt: now.toISOString(),
@@ -1139,6 +1145,68 @@ export class TenantRepository {
     return {
       ...verification,
       exportJob: job,
+    };
+  }
+
+  public async downloadExportBinary(params: {
+    requesterScope: TenantScope;
+    requesterUserId: string;
+    exportId: string;
+    format: 'zip' | 'xlsx';
+    expectedChecksum?: string;
+    now?: Date;
+  }): Promise<{
+    authorized: boolean;
+    httpStatus: 200 | 403 | 404 | 409 | 410 | 422;
+    reason?: string;
+    buffer?: Buffer;
+    contentType?: string;
+    filename?: string;
+    sha256Checksum?: string;
+  }> {
+    const authResult = await this.requestExportDownload(params);
+    if (!authResult.authorized || !authResult.exportJob) {
+      return {
+        authorized: false,
+        httpStatus: authResult.httpStatus,
+        reason: authResult.reason,
+      };
+    }
+
+    const job = authResult.exportJob;
+    if (params.format === 'xlsx') {
+      if (!job.xlsxBuffer) {
+        return {
+          authorized: false,
+          httpStatus: 409,
+          reason: 'XLSX buffer is not available for this export job',
+        };
+      }
+      return {
+        authorized: true,
+        httpStatus: 200,
+        buffer: job.xlsxBuffer,
+        contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        filename: `docready_${job.packageId}.xlsx`,
+        sha256Checksum: job.sha256Checksum,
+      };
+    }
+
+    if (!job.zipBuffer) {
+      return {
+        authorized: false,
+        httpStatus: 409,
+        reason: 'ZIP buffer is not available for this export job',
+      };
+    }
+
+    return {
+      authorized: true,
+      httpStatus: 200,
+      buffer: job.zipBuffer,
+      contentType: 'application/zip',
+      filename: `docready_${job.packageId}.zip`,
+      sha256Checksum: job.sha256Checksum,
     };
   }
 

@@ -9,7 +9,9 @@
   },
   "dependencies": {
     "@docready/contracts": "workspace:*",
-    "@docready/domain": "workspace:*"
+    "@docready/domain": "workspace:*",
+    "@docready/files": "workspace:*",
+    "exceljs": "^4.4.0"
   },
   "devDependencies": {
     "@types/node": "^20.17.0",
