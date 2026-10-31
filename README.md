@@ -1,7 +1,8 @@
 # DocReady — Evidence-Backed Accounting Document Preparation & Export Platform
 
+[![CI](https://github.com/Sakeerin/DocReady/actions/workflows/ci.yml/badge.svg)](https://github.com/Sakeerin/DocReady/actions/workflows/ci.yml)
 [![Open Source](https://img.shields.io/badge/Open%20Source-Yes-brightgreen)](https://github.com/Sakeerin/DocReady)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 **DocReady** เป็นโปรเจกต์ **Open Source** สำหรับระบบช่วยรับเอกสาร (Intake), จัดหมวดหมู่, สกัดข้อมูลพร้อมพิกัดหลักฐานบนภาพต้นฉบับ (Evidence-Backed OCR & Jev Decision), ตรวจสอบความครบถ้วนของชุดเอกสารประจำงวด (Checklist & Expected Items), ติดตามเอกสารที่ขาดจากลูกค้า, และสร้างชุดส่งออกเอกสาร (`XLSX` + `Split PDF` + `manifest.json`) สำหรับสำนักงานบัญชีและนักพัฒนาที่ต้องการนำไปศึกษา พัฒนาต่อยอด หรือติดตั้งใช้งานเอง (Self-Hosted)
 
@@ -77,13 +78,16 @@ DocReady/
 # 1. ติดตั้ง dependencies ทั้งหมดใน Monorepo
 pnpm install
 
-# 2. ตรวจสอบความถูกต้องของ TypeScript ทั้งหมดทุกแพ็กเกจและแอป
+# 2. รัน Linter ตรวจสอบกฎสถาปัตยกรรมและโค้ด
+pnpm run lint
+
+# 3. ตรวจสอบความถูกต้องของ TypeScript ทั้งหมดทุกแพ็กเกจและแอป
 pnpm run typecheck
 
-# 3. รันชุดทดสอบอัตโนมัติ (Vitest)
+# 4. รันชุดทดสอบอัตโนมัติ (Vitest)
 pnpm run test
 
-# 4. รันระบบในโหมดพัฒนา (Next.js Web App + Background Worker)
+# 5. รันระบบในโหมดพัฒนา (Next.js Web App + Background Worker)
 pnpm run dev
 ```
 
@@ -119,10 +123,11 @@ pnpm run dev
 โปรเจกต์ **DocReady** เปิดเผยซอร์สโค้ดในรูปแบบ **Open Source** เพื่อให้ชุมชนนักพัฒนาและสำนักงานบัญชีสามารถนำไปใช้งาน ตรวจสอบความโปร่งใสของอัลกอริทึม และร่วมกันพัฒนาต่อยอดได้
 
 ### แนวทางการร่วมพัฒนา (Contributing)
-1. ศึกษากฎเหล็กสถาปัตยกรรมและแนวทางการเขียนโค้ดใน [`AGENTS.md`](AGENTS.md)
-2. สร้าง Branch ใหม่จาก `main` สำหรับฟีเจอร์หรือการแก้ไขบั๊ก
-3. ตรวจสอบให้แน่ใจว่าโค้ดผ่าน `pnpm run typecheck` และ `pnpm run test` ครบทุกชุดทดสอบก่อนเปิด Pull Request
+1. ศึกษากฎเหล็กสถาปัตยกรรมและแนวทางการเขียนโค้ดใน [`AGENTS.md`](AGENTS.md) และ [`CONTRIBUTING.md`](CONTRIBUTING.md)
+2. สำหรับการรายงานช่องโหว่ด้านความปลอดภัย โปรดศึกษา [`SECURITY.md`](SECURITY.md)
+3. สร้าง Branch ใหม่จาก `main` สำหรับฟีเจอร์หรือการแก้ไขบั๊ก
+4. ตรวจสอบให้แน่ใจว่าโค้ดผ่าน `pnpm run lint`, `pnpm run typecheck` และ `pnpm run test` ครบทุกชุดทดสอบก่อนเปิด Pull Request
 
 ### สัญญาอนุญาต (License)
-เผยแพร่ภายใต้สัญญาอนุญาตแบบเปิด (**MIT License**)
+เผยแพร่ภายใต้สัญญาอนุญาตแบบเปิด ([**MIT License**](LICENSE))
 

@@ -197,4 +197,33 @@ describe('Phase 1 Review Fixes Verification (SQL RLS, Strict TS, Calendar/TaxID,
     const refetchedPkg = await repo.getPackageById(scope, pkg.id);
     expect(refetchedPkg?.items[0]?.grandTotal).toBe('1000.00');
   });
+
+  it('OS-01: Open Source community files (LICENSE, CONTRIBUTING.md, SECURITY.md, .env.example), CI workflow, and watermarked synthetic fixtures exist and are valid', () => {
+    const rootDir = join(__dirname, '..');
+    expect(readFileSync(join(rootDir, 'LICENSE'), 'utf8')).toContain('MIT License');
+    expect(readFileSync(join(rootDir, 'CONTRIBUTING.md'), 'utf8')).toContain('pnpm run lint');
+    expect(readFileSync(join(rootDir, 'SECURITY.md'), 'utf8')).toContain('Row Level Security');
+    expect(readFileSync(join(rootDir, '.env.example'), 'utf8')).toContain('DOCREADY_OCR_PROVIDER');
+
+    const ciYaml = readFileSync(join(rootDir, '.github', 'workflows', 'ci.yml'), 'utf8');
+    expect(ciYaml).toContain('pnpm run lint');
+    expect(ciYaml).toContain('pnpm run typecheck');
+    expect(ciYaml).toContain('pnpm run test');
+
+    const synPdf = readFileSync(
+      join(rootDir, 'fixtures', 'synthetic', 'images', 'syn_tax_inv_001.pdf'),
+      'utf8'
+    );
+    expect(synPdf).toContain('%PDF-1.4');
+    expect(synPdf).toContain('DEMO / SYNTHETIC');
+
+    const synLabel = JSON.parse(
+      readFileSync(
+        join(rootDir, 'fixtures', 'synthetic', 'labels', 'syn_tax_inv_001.json'),
+        'utf8'
+      )
+    );
+    expect(synLabel.synthetic_tag).toBe('DEMO_SYNTHETIC');
+    expect(synLabel.ground_truth_spans.length).toBeGreaterThanOrEqual(4);
+  });
 });

@@ -1,0 +1,23 @@
+%PDF-1.4
+%DocReady-Synthetic-Watermark: DEMO / SYNTHETIC — DO NOT USE FOR REAL TAX FILING
+%DocReady-Fixture: id=DOC-SYN-001 filename=syn_tax_inv_001.pdf
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Count 1 /Kids [3 0 R] >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Watermark (DEMO / SYNTHETIC) >>
+endobj
+xref
+0 4
+0000000000 65535 f 
+0000000142 00000 n 
+0000000191 00000 n 
+0000000248 00000 n 
+trailer
+<< /Size 4 /Root 1 0 R >>
+startxref
+340
+%%EOF

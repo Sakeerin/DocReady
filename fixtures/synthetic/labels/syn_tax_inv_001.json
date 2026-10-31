@@ -1,0 +1,38 @@
+{
+  "id": "DOC-SYN-001",
+  "synthetic_tag": "DEMO_SYNTHETIC",
+  "watermark": "DEMO / SYNTHETIC",
+  "filename": "syn_tax_inv_001.pdf",
+  "ground_truth_spans": [
+    {
+      "id": "gt_span_1",
+      "page": 1,
+      "field_name": "document_number",
+      "text": "INV-2026-0001",
+      "boundingBox": { "x": 0.72, "y": 0.08, "width": 0.22, "height": 0.03 }
+    },
+    {
+      "id": "gt_span_2",
+      "page": 1,
+      "field_name": "document_date",
+      "text": "05/10/2026",
+      "normalized_iso": "2026-10-05",
+      "boundingBox": { "x": 0.72, "y": 0.11, "width": 0.18, "height": 0.03 }
+    },
+    {
+      "id": "gt_span_3",
+      "page": 1,
+      "field_name": "seller_tax_id",
+      "text": "0105558001118",
+      "boundingBox": { "x": 0.08, "y": 0.10, "width": 0.25, "height": 0.03 }
+    },
+    {
+      "id": "gt_span_4",
+      "page": 1,
+      "field_name": "grand_total",
+      "text": "10,700.00",
+      "normalized_value": "10700.00",
+      "boundingBox": { "x": 0.70, "y": 0.82, "width": 0.22, "height": 0.04 }
+    }
+  ]
+}

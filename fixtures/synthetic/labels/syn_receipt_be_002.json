@@ -1,0 +1,31 @@
+{
+  "id": "DOC-SYN-002",
+  "synthetic_tag": "DEMO_SYNTHETIC",
+  "watermark": "DEMO / SYNTHETIC",
+  "filename": "syn_receipt_be_002.pdf",
+  "ground_truth_spans": [
+    {
+      "id": "gt_span_be_1",
+      "page": 1,
+      "field_name": "document_number",
+      "text": "REC-2569-0042",
+      "boundingBox": { "x": 0.70, "y": 0.09, "width": 0.24, "height": 0.03 }
+    },
+    {
+      "id": "gt_span_be_2",
+      "page": 1,
+      "field_name": "document_date",
+      "text": "01/10/2569",
+      "normalized_iso": "2026-10-01",
+      "boundingBox": { "x": 0.70, "y": 0.13, "width": 0.18, "height": 0.03 }
+    },
+    {
+      "id": "gt_span_be_3",
+      "page": 1,
+      "field_name": "grand_total",
+      "text": "1,605.00",
+      "normalized_value": "1605.00",
+      "boundingBox": { "x": 0.68, "y": 0.80, "width": 0.22, "height": 0.04 }
+    }
+  ]
+}
