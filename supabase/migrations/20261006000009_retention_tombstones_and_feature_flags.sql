@@ -3,7 +3,7 @@
 
 CREATE TABLE IF NOT EXISTS public.asset_tombstones (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  office_id UUID NOT NULL REFERENCES public.accounting_offices(id) ON DELETE RESTRICT,
+  office_id UUID NOT NULL REFERENCES public.offices(id) ON DELETE RESTRICT,
   client_id UUID NOT NULL,
   asset_id UUID NOT NULL,
   deleted_by_user_id UUID NOT NULL,
@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS public.asset_tombstones (
 
 CREATE TABLE IF NOT EXISTS public.legal_holds (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  office_id UUID NOT NULL REFERENCES public.accounting_offices(id) ON DELETE RESTRICT,
+  office_id UUID NOT NULL REFERENCES public.offices(id) ON DELETE RESTRICT,
   client_id UUID NOT NULL,
   asset_id UUID NOT NULL,
   placed_by_user_id UUID NOT NULL,
@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS public.legal_holds (
 
 -- Kill switches: TRUE = feature is killed for that office. Uploads are always accepted.
 CREATE TABLE IF NOT EXISTS public.feature_flags (
-  office_id UUID PRIMARY KEY REFERENCES public.accounting_offices(id) ON DELETE CASCADE,
+  office_id UUID PRIMARY KEY REFERENCES public.offices(id) ON DELETE CASCADE,
   kill_ocr BOOLEAN NOT NULL DEFAULT false,
   kill_jev BOOLEAN NOT NULL DEFAULT false,
   kill_auto_classification BOOLEAN NOT NULL DEFAULT false,
@@ -44,18 +44,23 @@ CREATE TABLE IF NOT EXISTS public.feature_flags (
 );
 
 ALTER TABLE public.asset_tombstones ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.asset_tombstones FORCE ROW LEVEL SECURITY;
+
 ALTER TABLE public.legal_holds ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.legal_holds FORCE ROW LEVEL SECURITY;
+
 ALTER TABLE public.feature_flags ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.feature_flags FORCE ROW LEVEL SECURITY;
 
 CREATE POLICY asset_tombstones_office_isolation ON public.asset_tombstones
   FOR ALL
-  USING (public.user_has_office_access(office_id))
-  WITH CHECK (public.user_has_office_access(office_id));
+  USING (public.user_has_office_access(office_id) AND public.user_has_client_access(office_id, client_id))
+  WITH CHECK (public.user_has_office_access(office_id) AND public.user_has_client_access(office_id, client_id));
 
 CREATE POLICY legal_holds_office_isolation ON public.legal_holds
   FOR ALL
-  USING (public.user_has_office_access(office_id))
-  WITH CHECK (public.user_has_office_access(office_id));
+  USING (public.user_has_office_access(office_id) AND public.user_has_client_access(office_id, client_id))
+  WITH CHECK (public.user_has_office_access(office_id) AND public.user_has_client_access(office_id, client_id));
 
 CREATE POLICY feature_flags_office_isolation ON public.feature_flags
   FOR ALL

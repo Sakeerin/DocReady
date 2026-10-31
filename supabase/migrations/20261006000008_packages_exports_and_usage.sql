@@ -4,7 +4,7 @@
 -- 1. Packages (Immutable Snapshot Header)
 CREATE TABLE IF NOT EXISTS public.packages (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  office_id UUID NOT NULL REFERENCES public.accounting_offices(id) ON DELETE RESTRICT,
+  office_id UUID NOT NULL REFERENCES public.offices(id) ON DELETE RESTRICT,
   client_id UUID NOT NULL,
   period_id UUID NOT NULL,
   package_revision INTEGER NOT NULL DEFAULT 1 CHECK (package_revision >= 1),
@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS public.packages (
   UNIQUE (office_id, client_id, id),
   CONSTRAINT fk_packages_period
     FOREIGN KEY (office_id, client_id, period_id)
-    REFERENCES public.document_periods(office_id, client_id, id)
+    REFERENCES public.periods(office_id, client_id, id)
     ON DELETE RESTRICT
 );
 
@@ -96,7 +96,7 @@ CREATE TABLE IF NOT EXISTS public.export_jobs (
 -- 5. Usage & Cost Ledger Entries (DR-705)
 CREATE TABLE IF NOT EXISTS public.usage_ledger_entries (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  office_id UUID NOT NULL REFERENCES public.accounting_offices(id) ON DELETE RESTRICT,
+  office_id UUID NOT NULL REFERENCES public.offices(id) ON DELETE RESTRICT,
   client_id UUID NOT NULL,
   period_id UUID,
   metric_type TEXT NOT NULL CHECK (metric_type IN ('ocr_pages', 'jev_input_tokens', 'jev_output_tokens', 'storage_bytes', 'export_runs')),
@@ -113,35 +113,44 @@ CREATE TABLE IF NOT EXISTS public.usage_ledger_entries (
     ON DELETE RESTRICT
 );
 
--- Enable Row Level Security
+-- Enable & Force Row Level Security
 ALTER TABLE public.packages ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.package_items ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.approvals ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.export_jobs ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.usage_ledger_entries ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.packages FORCE ROW LEVEL SECURITY;
 
--- RLS Policies (Office Staff only for Package Approval, Export & Usage Ledger)
+ALTER TABLE public.package_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.package_items FORCE ROW LEVEL SECURITY;
+
+ALTER TABLE public.approvals ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.approvals FORCE ROW LEVEL SECURITY;
+
+ALTER TABLE public.export_jobs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.export_jobs FORCE ROW LEVEL SECURITY;
+
+ALTER TABLE public.usage_ledger_entries ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.usage_ledger_entries FORCE ROW LEVEL SECURITY;
+
+-- Dual-Level RLS Policies (Office + Client Access)
 CREATE POLICY packages_office_isolation ON public.packages
   FOR ALL
-  USING (public.user_has_office_access(office_id))
-  WITH CHECK (public.user_has_office_access(office_id));
+  USING (public.user_has_office_access(office_id) AND public.user_has_client_access(office_id, client_id))
+  WITH CHECK (public.user_has_office_access(office_id) AND public.user_has_client_access(office_id, client_id));
 
 CREATE POLICY package_items_office_isolation ON public.package_items
   FOR ALL
-  USING (public.user_has_office_access(office_id))
-  WITH CHECK (public.user_has_office_access(office_id));
+  USING (public.user_has_office_access(office_id) AND public.user_has_client_access(office_id, client_id))
+  WITH CHECK (public.user_has_office_access(office_id) AND public.user_has_client_access(office_id, client_id));
 
 CREATE POLICY approvals_office_isolation ON public.approvals
   FOR ALL
-  USING (public.user_has_office_access(office_id))
-  WITH CHECK (public.user_has_office_access(office_id));
+  USING (public.user_has_office_access(office_id) AND public.user_has_client_access(office_id, client_id))
+  WITH CHECK (public.user_has_office_access(office_id) AND public.user_has_client_access(office_id, client_id));
 
 CREATE POLICY export_jobs_office_isolation ON public.export_jobs
   FOR ALL
-  USING (public.user_has_office_access(office_id))
-  WITH CHECK (public.user_has_office_access(office_id));
+  USING (public.user_has_office_access(office_id) AND public.user_has_client_access(office_id, client_id))
+  WITH CHECK (public.user_has_office_access(office_id) AND public.user_has_client_access(office_id, client_id));
 
 CREATE POLICY usage_ledger_office_isolation ON public.usage_ledger_entries
   FOR ALL
-  USING (public.user_has_office_access(office_id))
-  WITH CHECK (public.user_has_office_access(office_id));
+  USING (public.user_has_office_access(office_id) AND public.user_has_client_access(office_id, client_id))
+  WITH CHECK (public.user_has_office_access(office_id) AND public.user_has_client_access(office_id, client_id));

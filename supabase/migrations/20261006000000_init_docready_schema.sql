@@ -84,7 +84,8 @@ CREATE TABLE IF NOT EXISTS source_assets (
     file_size_bytes BIGINT NOT NULL,
     status TEXT NOT NULL DEFAULT 'quarantined' CHECK (status IN ('quarantined', 'scanned_safe', 'rejected')),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    FOREIGN KEY (office_id, client_id, period_id) REFERENCES periods(office_id, client_id, id) ON DELETE CASCADE
+    FOREIGN KEY (office_id, client_id, period_id) REFERENCES periods(office_id, client_id, id) ON DELETE CASCADE,
+    UNIQUE(office_id, client_id, id)
 );
 
 -- 8. Logical Documents
@@ -93,14 +94,16 @@ CREATE TABLE IF NOT EXISTS documents (
     office_id UUID NOT NULL,
     client_id UUID NOT NULL,
     period_id UUID NOT NULL,
-    source_asset_id UUID NOT NULL REFERENCES source_assets(id) ON DELETE RESTRICT,
+    source_asset_id UUID NOT NULL,
     document_number TEXT, -- Maintained as String
     document_date DATE,
     primary_queue_category TEXT DEFAULT 'unknown',
     status TEXT NOT NULL DEFAULT 'received' CHECK (status IN ('received', 'processing', 'needs_review', 'needs_resubmission', 'reviewed', 'excluded', 'approved')),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    FOREIGN KEY (office_id, client_id, period_id) REFERENCES periods(office_id, client_id, id) ON DELETE CASCADE
+    FOREIGN KEY (office_id, client_id, period_id) REFERENCES periods(office_id, client_id, id) ON DELETE CASCADE,
+    FOREIGN KEY (office_id, client_id, source_asset_id) REFERENCES source_assets(office_id, client_id, id) ON DELETE RESTRICT,
+    UNIQUE(office_id, client_id, id)
 );
 
 -- Indices for rapid tenant-scoped querying

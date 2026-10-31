@@ -48,7 +48,7 @@ export async function POST(
       uploadedDocumentId: parseResult.data.uploadedDocumentId,
       message: 'รับคำตอบจากลูกค้าแล้ว (สถานะ: responded — รอนักบัญชีตรวจสอบเพื่อปิดคำขอ)',
     });
-  } catch (err: any) {
+  } catch {
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

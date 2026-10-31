@@ -331,20 +331,33 @@ export class TenantRepository {
   }
 
   // Document Operations
+  private findDocumentInScope(scope: TenantScope, documentId: string): DocumentRecord | null {
+    return (
+      this.documents.find((doc) => {
+        if (doc.id !== documentId) return false;
+        if (doc.officeId !== scope.officeId) return false;
+        if (scope.clientId && doc.clientId !== scope.clientId) return false;
+        return true;
+      }) ?? null
+    );
+  }
+
   public async getDocuments(scope: TenantScope): Promise<DocumentRecord[]> {
-    return this.documents.filter((doc) => {
-      if (doc.officeId !== scope.officeId) return false;
-      if (scope.clientId && doc.clientId !== scope.clientId) return false;
-      return true;
-    });
+    return this.documents
+      .filter((doc) => {
+        if (doc.officeId !== scope.officeId) return false;
+        if (scope.clientId && doc.clientId !== scope.clientId) return false;
+        return true;
+      })
+      .map((doc) => structuredClone(doc));
   }
 
   public async getDocumentById(
     scope: TenantScope,
     documentId: string
   ): Promise<DocumentRecord | null> {
-    const docs = await this.getDocuments(scope);
-    return docs.find((d) => d.id === documentId) ?? null;
+    const found = this.findDocumentInScope(scope, documentId);
+    return found ? structuredClone(found) : null;
   }
 
   public async addDocument(
@@ -378,7 +391,7 @@ export class TenantRepository {
     expectedRevision?: number,
     actorUserId = 'user_reviewer'
   ): Promise<DocumentRecord> {
-    const doc = await this.getDocumentById(scope, documentId);
+    const doc = this.findDocumentInScope(scope, documentId);
     if (!doc) {
       throw new Error('Document not found or access denied');
     }
@@ -850,7 +863,7 @@ export class TenantRepository {
       exceptionsAcknowledged?: boolean;
     }
   ): Promise<{ packageRecord: PackageRecord; approval: ApprovalRecord }> {
-    const pkg = await this.getPackageById(scope, packageId);
+    const pkg = this.findAndValidatePackageInScope(scope, packageId);
     if (!pkg) {
       throw new Error('Package not found or access denied');
     }
@@ -896,13 +909,13 @@ export class TenantRepository {
     };
 
     this.approvals.push(approval);
-    return { packageRecord: pkg, approval };
+    return { packageRecord: structuredClone(pkg), approval: structuredClone(approval) };
   }
 
-  public async getPackageById(
+  private findAndValidatePackageInScope(
     scope: TenantScope,
     packageId: string
-  ): Promise<PackageRecord | null> {
+  ): PackageRecord | null {
     const pkg = this.packages.find(
       (p) =>
         p.id === packageId &&
@@ -942,6 +955,14 @@ export class TenantRepository {
     }
 
     return pkg;
+  }
+
+  public async getPackageById(
+    scope: TenantScope,
+    packageId: string
+  ): Promise<PackageRecord | null> {
+    const pkg = this.findAndValidatePackageInScope(scope, packageId);
+    return pkg ? structuredClone(pkg) : null;
   }
 
   public async getPackagesByPeriod(

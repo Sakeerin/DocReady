@@ -25,7 +25,7 @@ export async function POST(
       outboxEventEnqueued: true,
       message: `Re-OCR processing queued using provider: ${provider}`,
     });
-  } catch (err: any) {
+  } catch {
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

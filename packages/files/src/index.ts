@@ -101,7 +101,7 @@ export interface ExtractPdfPageRangeParams {
 
 /**
  * Produces a valid split-derived PDF binary buffer (%PDF-1.4) for the approved page range
- * with embedded provenance metadata (DR-703).
+ * with embedded provenance metadata (DR-703) and an accurate xref table / startxref offset.
  */
 export function extractPdfPageRangeBuffer(params: ExtractPdfPageRangeParams): Buffer {
   if (params.sourceBuffer) {
@@ -114,31 +114,58 @@ export function extractPdfPageRangeBuffer(params: ExtractPdfPageRangeParams): Bu
     }
   }
 
+  const cleanToken = (v: string): string => v.replace(/[\r\n\0]/g, '_');
   const range = parsePageRange(params.pageRange);
-  const pageObjects: string[] = [];
+  const objects: string[] = [];
   const kidsRefs: string[] = [];
 
   for (let i = 0; i < range.pageCount; i += 1) {
     const objId = 3 + i;
-    const sourcePageNo = range.startPage + i;
     kidsRefs.push(`${objId} 0 R`);
-    pageObjects.push(
+  }
+
+  objects.push('1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj');
+  objects.push(
+    `2 0 obj\n<< /Type /Pages /Count ${range.pageCount} /Kids [${kidsRefs.join(' ')}] >>\nendobj`
+  );
+
+  for (let i = 0; i < range.pageCount; i += 1) {
+    const objId = 3 + i;
+    const sourcePageNo = range.startPage + i;
+    objects.push(
       `${objId} 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /DocReadySourcePage ${sourcePageNo} >>\nendobj`
     );
   }
 
-  const provenanceLine = `%DocReady-Provenance: documentId=${params.documentId} rev=${params.documentRevision} sourceAssetId=${params.sourceAssetId} sourceHash=${params.sourceHash} pageRange=${range.startPage}-${range.endPage}`;
+  const provenanceLine = `%DocReady-Provenance: documentId=${cleanToken(params.documentId)} rev=${params.documentRevision} sourceAssetId=${cleanToken(params.sourceAssetId)} sourceHash=${cleanToken(params.sourceHash)} pageRange=${range.startPage}-${range.endPage}`;
 
-  const pdfContent = [
-    '%PDF-1.4',
-    provenanceLine,
-    '1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj',
-    `2 0 obj\n<< /Type /Pages /Count ${range.pageCount} /Kids [${kidsRefs.join(' ')}] >>\nendobj`,
-    ...pageObjects,
-    'trailer\n<< /Root 1 0 R >>',
-    '%%EOF',
-  ].join('\n');
+  const lines: string[] = ['%PDF-1.4', provenanceLine];
+  const offsets: number[] = [];
+  let byteOffset = Buffer.byteLength(`${lines.join('\n')}\n`, 'utf8');
 
-  return Buffer.from(pdfContent, 'utf8');
+  for (const obj of objects) {
+    offsets.push(byteOffset);
+    lines.push(obj);
+    byteOffset += Buffer.byteLength(`${obj}\n`, 'utf8');
+  }
+
+  const xrefStart = byteOffset;
+  const xrefEntries = [
+    '0000000000 65535 f ',
+    ...offsets.map((off) => `${String(off).padStart(10, '0')} 00000 n `),
+  ];
+
+  lines.push(
+    'xref',
+    `0 ${objects.length + 1}`,
+    ...xrefEntries,
+    'trailer',
+    `<< /Size ${objects.length + 1} /Root 1 0 R >>`,
+    'startxref',
+    String(xrefStart),
+    '%%EOF'
+  );
+
+  return Buffer.from(lines.join('\n'), 'utf8');
 }
 

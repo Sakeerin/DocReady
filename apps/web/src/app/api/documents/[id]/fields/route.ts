@@ -38,7 +38,7 @@ export async function PATCH(
       actor: 'human',
       message: 'Document fields confirmed and updated successfully',
     });
-  } catch (err: any) {
+  } catch {
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

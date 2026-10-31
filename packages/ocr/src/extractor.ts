@@ -26,25 +26,33 @@ export function extractFieldCandidates(spans: OcrSpan[]): ExtractedCandidate[] {
     // 2. Date Extractor (DD/MM/YYYY or DD/MM/25XX for Buddhist Era)
     const dateMatch = text.match(/(\d{1,2})[\/\.-](\d{1,2})[\/\.-](\d{4})/);
     if (dateMatch && dateMatch[1] && dateMatch[2] && dateMatch[3]) {
-      const day = dateMatch[1].padStart(2, '0');
-      const month = dateMatch[2].padStart(2, '0');
+      const dayNum = parseInt(dateMatch[1], 10);
+      const monthNum = parseInt(dateMatch[2], 10);
       let year = parseInt(dateMatch[3], 10);
 
-      // Buddhist Era (B.E. พ.ศ.) conversion if year > 2500
-      if (year > 2500) {
+      // Buddhist Era (B.E. พ.ศ.) conversion if year >= 2400
+      if (year >= 2400) {
         year -= 543;
       }
 
-      const normalizedIso = `${year}-${month}-${day}`;
+      const isLeap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+      const daysInMonth = [31, isLeap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+      const maxDay = monthNum >= 1 && monthNum <= 12 ? (daysInMonth[monthNum - 1] ?? 0) : 0;
 
-      candidates.push({
-        fieldName: 'document_date',
-        rawText: text,
-        normalizedValue: normalizedIso,
-        confidence: span.confidence,
-        spanIds: [span.id],
-        boundingBox: span.boundingBox,
-      });
+      if (dayNum >= 1 && dayNum <= maxDay) {
+        const day = String(dayNum).padStart(2, '0');
+        const month = String(monthNum).padStart(2, '0');
+        const normalizedIso = `${year}-${month}-${day}`;
+
+        candidates.push({
+          fieldName: 'document_date',
+          rawText: text,
+          normalizedValue: normalizedIso,
+          confidence: span.confidence,
+          spanIds: [span.id],
+          boundingBox: span.boundingBox,
+        });
+      }
     }
 
     // 3. Document Number Extractor (e.g. INV-2026-0001, REC-9941, or leading zero numbers)

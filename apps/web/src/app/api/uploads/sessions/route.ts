@@ -32,7 +32,7 @@ export async function POST(request: Request) {
       storageKey,
       expiresAt: new Date(Date.now() + 3600 * 1000).toISOString(),
     });
-  } catch (err: any) {
+  } catch {
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

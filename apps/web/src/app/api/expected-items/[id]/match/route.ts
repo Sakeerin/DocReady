@@ -28,7 +28,7 @@ export async function POST(
       confirmedBy: 'human_reviewer',
       message: `Document ${documentId} matched to expected item ${params.id}`,
     });
-  } catch (err: any) {
+  } catch {
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

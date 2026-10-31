@@ -40,7 +40,7 @@ export async function POST(
       groups,
       message: 'Page grouping updated successfully',
     });
-  } catch (err: any) {
+  } catch {
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

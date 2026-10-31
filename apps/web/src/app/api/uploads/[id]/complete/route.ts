@@ -31,7 +31,7 @@ export async function POST(
       outboxEventEnqueued: true,
       message: 'File receipt completed successfully. Quarantine scan queued.',
     });
-  } catch (err: any) {
+  } catch {
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

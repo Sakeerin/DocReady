@@ -3,7 +3,7 @@
 
 CREATE TABLE IF NOT EXISTS public.pilot_events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  office_id UUID NOT NULL REFERENCES public.accounting_offices(id) ON DELETE RESTRICT,
+  office_id UUID NOT NULL REFERENCES public.offices(id) ON DELETE RESTRICT,
   client_id UUID NOT NULL,
   period_id UUID,
   mode TEXT NOT NULL CHECK (mode IN ('baseline', 'assisted')),
@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS public.pilot_events (
 
 CREATE TABLE IF NOT EXISTS public.pilot_review_samples (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  office_id UUID NOT NULL REFERENCES public.accounting_offices(id) ON DELETE RESTRICT,
+  office_id UUID NOT NULL REFERENCES public.offices(id) ON DELETE RESTRICT,
   client_id UUID NOT NULL,
   document_id UUID NOT NULL,
   sample_group TEXT NOT NULL CHECK (sample_group IN ('reviewer_accepted', 'reviewer_corrected', 'ai_abstained')),
@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS public.pilot_review_samples (
 
 CREATE TABLE IF NOT EXISTS public.pilot_wtp_responses (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  office_id UUID NOT NULL REFERENCES public.accounting_offices(id) ON DELETE RESTRICT,
+  office_id UUID NOT NULL REFERENCES public.offices(id) ON DELETE RESTRICT,
   client_id UUID,
   respondent_role TEXT NOT NULL CHECK (respondent_role IN ('accountant', 'office_owner', 'client_admin')),
   pricing_model TEXT NOT NULL CHECK (pricing_model IN ('subscription_page_allowance', 'per_client_seat', 'per_page', 'other')),
@@ -49,18 +49,23 @@ CREATE TABLE IF NOT EXISTS public.pilot_wtp_responses (
 );
 
 ALTER TABLE public.pilot_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.pilot_events FORCE ROW LEVEL SECURITY;
+
 ALTER TABLE public.pilot_review_samples ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.pilot_review_samples FORCE ROW LEVEL SECURITY;
+
 ALTER TABLE public.pilot_wtp_responses ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.pilot_wtp_responses FORCE ROW LEVEL SECURITY;
 
 CREATE POLICY pilot_events_office_isolation ON public.pilot_events
   FOR ALL
-  USING (public.user_has_office_access(office_id))
-  WITH CHECK (public.user_has_office_access(office_id));
+  USING (public.user_has_office_access(office_id) AND public.user_has_client_access(office_id, client_id))
+  WITH CHECK (public.user_has_office_access(office_id) AND public.user_has_client_access(office_id, client_id));
 
 CREATE POLICY pilot_review_samples_office_isolation ON public.pilot_review_samples
   FOR ALL
-  USING (public.user_has_office_access(office_id))
-  WITH CHECK (public.user_has_office_access(office_id));
+  USING (public.user_has_office_access(office_id) AND public.user_has_client_access(office_id, client_id))
+  WITH CHECK (public.user_has_office_access(office_id) AND public.user_has_client_access(office_id, client_id));
 
 CREATE POLICY pilot_wtp_office_isolation ON public.pilot_wtp_responses
   FOR ALL

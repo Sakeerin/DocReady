@@ -59,7 +59,7 @@ export async function POST(
         estimatedCostUsd: decisionResult.estimatedCostUsd,
       },
     });
-  } catch (err: any) {
+  } catch {
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

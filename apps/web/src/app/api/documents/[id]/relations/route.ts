@@ -20,7 +20,7 @@ export async function GET(
         },
       ],
     });
-  } catch (err: any) {
+  } catch {
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
@@ -53,7 +53,7 @@ export async function POST(
       relationType: validatedRelation,
       message: `Document relation ${validatedRelation} created successfully`,
     });
-  } catch (err: any) {
+  } catch {
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

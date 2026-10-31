@@ -14,7 +14,7 @@ export async function POST(
       publishedAt: new Date().toISOString(),
       message: 'Missing document request published to Client Portal.',
     });
-  } catch (err: any) {
+  } catch {
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

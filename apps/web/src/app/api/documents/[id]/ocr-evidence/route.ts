@@ -26,7 +26,7 @@ export async function GET(
         { fieldName: 'grand_total', rawText: '10,700.00', normalizedValue: '10700.00', spanIds: ['span_6'] },
       ],
     });
-  } catch (err: any) {
+  } catch {
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

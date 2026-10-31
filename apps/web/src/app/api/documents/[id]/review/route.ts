@@ -52,7 +52,7 @@ export async function POST(
       reason,
       message: `Document status transitioned to ${statusMap[action]} (Revision ${nextRevision})`,
     });
-  } catch (err: any) {
+  } catch {
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

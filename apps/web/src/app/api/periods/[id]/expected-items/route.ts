@@ -48,7 +48,7 @@ export async function GET(
       matches: sampleMatches,
       readiness,
     });
-  } catch (err: any) {
+  } catch {
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
@@ -103,7 +103,7 @@ export async function POST(
         ...parseResult.data,
       },
     });
-  } catch (err: any) {
+  } catch {
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

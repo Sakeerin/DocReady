@@ -69,6 +69,31 @@ export function preserveStringIdentifier(rawInput: string): string {
 }
 
 /**
+ * Validates a 13-digit Thai Tax ID using the official Revenue Department Mod 11 checksum.
+ */
+export function isValidThaiTaxIdChecksum(taxId: string): boolean {
+  if (!/^\d{13}$/.test(taxId)) return false;
+  let sum = 0;
+  for (let i = 0; i < 12; i += 1) {
+    sum += Number(taxId[i]) * (13 - i);
+  }
+  const checkDigit = (11 - (sum % 11)) % 10;
+  return checkDigit === Number(taxId[12]);
+}
+
+/**
+ * Validates that a Gregorian calendar date (year, month 1..12, day 1..31) is a real calendar date.
+ */
+export function isValidCalendarDate(year: number, month: number, day: number): boolean {
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return false;
+  if (year < 1900 || year > 2200 || month < 1 || month > 12 || day < 1) return false;
+  const isLeap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+  const daysInMonth = [31, isLeap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  const maxDay = daysInMonth[month - 1] ?? 0;
+  return day <= maxDay;
+}
+
+/**
  * Validates decimal monetary strings using strict regex.
  */
 export function isValidDecimalString(val: string): boolean {
@@ -1072,7 +1097,10 @@ export function detectAmbiguousDate(raw: string): AmbiguousDateResult {
 
   for (const [d, mo] of dayMonthPairs) {
     for (const y of yearOptions) {
-      candidates.push(`${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`);
+      const effectiveGregorianYear = y >= 2400 ? y - 543 : y;
+      if (isValidCalendarDate(effectiveGregorianYear, mo, d)) {
+        candidates.push(`${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`);
+      }
     }
   }
 

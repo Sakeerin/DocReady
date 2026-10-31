@@ -29,10 +29,14 @@ export function sanitizeExportPath(filename: string): string {
 }
 
 /**
- * Escapes leading cell formula characters (=, +, -, @, \t, \r) to prevent Excel Formula Injection (T-25).
+ * Escapes leading cell formula characters (=, +, -, @, \t, \r) to prevent Excel Formula Injection (T-25),
+ * while allowing strictly numeric negative decimal strings (e.g. "-100.00" for credit notes).
  */
 export function escapeExcelFormulaCell(cellValue: string): string {
   if (typeof cellValue !== 'string') return cellValue;
+  if (/^-\d+(\.\d{1,4})?$/.test(cellValue)) {
+    return cellValue;
+  }
   if (/^[=+\-@\t\r]/.test(cellValue)) {
     return `'${cellValue}`;
   }
@@ -831,9 +835,13 @@ export function listPkZipEntries(zipBuffer: Buffer): ZipDirectoryEntry[] {
 }
 
 /**
- * Extracts and decompresses a single file entry from a PKZIP buffer, verifying its CRC32.
+ * Extracts and decompresses a single file entry from a PKZIP buffer, verifying bounds, maxOutputLength (Zip Bomb guard), and CRC32.
  */
-export function extractPkZipEntry(zipBuffer: Buffer, entryName: string): Buffer {
+export function extractPkZipEntry(
+  zipBuffer: Buffer,
+  entryName: string,
+  maxOutputLength = 50 * 1024 * 1024
+): Buffer {
   const entries = listPkZipEntries(zipBuffer);
   const found = entries.find((e) => e.name === entryName);
   if (!found) {
@@ -841,16 +849,21 @@ export function extractPkZipEntry(zipBuffer: Buffer, entryName: string): Buffer 
   }
 
   const localOffset = found.localHeaderOffset;
-  if (zipBuffer.readUInt32LE(localOffset) !== 0x04034b50) {
+  if (localOffset + 30 > zipBuffer.length || zipBuffer.readUInt32LE(localOffset) !== 0x04034b50) {
     throw new Error(`Corrupt local file header at offset ${localOffset}`);
   }
   const nameLen = zipBuffer.readUInt16LE(localOffset + 26);
   const extraLen = zipBuffer.readUInt16LE(localOffset + 28);
   const dataStart = localOffset + 30 + nameLen + extraLen;
+  if (dataStart + found.compressedSize > zipBuffer.length) {
+    throw new Error(`Corrupt ZIP entry slice bounds for ${entryName}`);
+  }
   const compressedSlice = zipBuffer.subarray(dataStart, dataStart + found.compressedSize);
 
   const uncompressed =
-    found.compressionMethod === 8 ? inflateRawSync(compressedSlice) : Buffer.from(compressedSlice);
+    found.compressionMethod === 8
+      ? inflateRawSync(compressedSlice, { maxOutputLength })
+      : Buffer.from(compressedSlice);
 
   const actualCrc = computeCrc32(uncompressed);
   if (actualCrc !== found.crc32) {

@@ -33,7 +33,7 @@ export async function GET(request: Request) {
     }
 
     return NextResponse.json({ requests: allRequests });
-  } catch (err: any) {
+  } catch {
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
@@ -59,7 +59,7 @@ export async function POST(request: Request) {
       },
       message: 'Draft missing document request created (hidden from client until published).',
     });
-  } catch (err: any) {
+  } catch {
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
